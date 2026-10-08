@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ProductOptionService>();
         services.AddScoped<ProductVariantService>();
         services.AddScoped<ProductImageService>();
+        services.AddScoped<CatalogDashboardService>();
         services.AddValidatorsFromAssemblyContaining<CategoryService>();
         return services;
     }

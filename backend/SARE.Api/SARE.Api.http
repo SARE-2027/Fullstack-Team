@@ -4,6 +4,9 @@
 @productId = replace-with-id-from-product-create-response
 @staffToken = replace-with-your-development-staff-token
 @imageFile = replace-with-absolute-path-to-image.png
+@optionId = replace-with-id-from-option-create-response
+@valueId = replace-with-id-from-value-create-response
+@variantId = replace-with-id-from-variant-create-response
 
 ### User: list categories without a token
 GET {{baseUrl}}/api/v1/categories?page=1&pageSize=20
@@ -123,3 +126,134 @@ Content-Type: image/png
 ### Admin: remove product image
 DELETE {{baseUrl}}/api/v1/admin/products/{{productId}}/image
 Authorization: Bearer {{adminToken}}
+
+### Admin: list options and values
+GET {{baseUrl}}/api/v1/admin/products/{{productId}}/options
+Authorization: Bearer {{adminToken}}
+
+### Admin: create option
+POST {{baseUrl}}/api/v1/admin/products/{{productId}}/options
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "nameAr": "الحجم", "nameEn": "Size" }
+
+### Admin: read option
+GET {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}
+Authorization: Bearer {{adminToken}}
+
+### Admin: rename option
+PUT {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "nameAr": "حجم العبوة", "nameEn": "Pack size" }
+
+### Admin: list option values
+GET {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}/values
+Authorization: Bearer {{adminToken}}
+
+### Admin: create option value
+POST {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}/values
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "valueAr": "صغير", "valueEn": "Small" }
+
+### Admin: read option value
+GET {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}/values/{{valueId}}
+Authorization: Bearer {{adminToken}}
+
+### Admin: rename option value
+PUT {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}/values/{{valueId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "valueAr": "عبوة صغيرة", "valueEn": "Small pack" }
+
+### Public: options used by available variants
+GET {{baseUrl}}/api/v1/products/{{productId}}/options
+
+### Staff: all options and values
+GET {{baseUrl}}/api/v1/staff/products/{{productId}}/options
+Authorization: Bearer {{staffToken}}
+
+### Admin: create variant with an option value (use [] for no options)
+POST {{baseUrl}}/api/v1/admin/products/{{productId}}/variants
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "barcode": "6221234567890",
+  "priceMinor": 1500,
+  "weightG": 100,
+  "isActive": true,
+  "optionValueIds": ["{{valueId}}"]
+}
+
+### Admin: search all variants
+GET {{baseUrl}}/api/v1/admin/variants?search=622&categoryId={{categoryId}}&page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Admin: variants for a product
+GET {{baseUrl}}/api/v1/admin/products/{{productId}}/variants
+Authorization: Bearer {{adminToken}}
+
+### Admin: read variant
+GET {{baseUrl}}/api/v1/admin/variants/{{variantId}}
+Authorization: Bearer {{adminToken}}
+
+### Admin: update variant and its option associations
+PUT {{baseUrl}}/api/v1/admin/products/{{productId}}/variants/{{variantId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "barcode": "6221234567890",
+  "priceMinor": 2000,
+  "weightG": 120,
+  "isActive": true,
+  "optionValueIds": ["{{valueId}}"]
+}
+
+### Public: available variants
+GET {{baseUrl}}/api/v1/variants?page=1&pageSize=20
+
+### Public: variants for an available product
+GET {{baseUrl}}/api/v1/products/{{productId}}/variants
+
+### Public: read available variant
+GET {{baseUrl}}/api/v1/variants/{{variantId}}
+
+### Public: exact barcode lookup
+GET {{baseUrl}}/api/v1/variants/by-barcode/6221234567890
+
+### Public: barcode query form (also supports URL-encoded slashes)
+GET {{baseUrl}}/api/v1/variants/by-barcode?barcode=6221234567890
+
+### Staff: all variants including inactive ones
+GET {{baseUrl}}/api/v1/staff/variants?isActive=false
+Authorization: Bearer {{staffToken}}
+
+### Staff: barcode lookup including inactive variants
+GET {{baseUrl}}/api/v1/staff/variants/by-barcode?barcode=6221234567890
+Authorization: Bearer {{staffToken}}
+
+### Admin: deactivate variant (keeps invoice references)
+PATCH {{baseUrl}}/api/v1/admin/products/{{productId}}/variants/{{variantId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Admin: delete unused value (409 if used by any variant)
+DELETE {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}/values/{{valueId}}
+Authorization: Bearer {{adminToken}}
+
+### Admin: delete unused option (409 if any value is used)
+DELETE {{baseUrl}}/api/v1/admin/products/{{productId}}/options/{{optionId}}
+Authorization: Bearer {{adminToken}}
+
+### Dashboard: complete catalog counters
+GET {{baseUrl}}/api/v1/dashboard/summary
+Authorization: Bearer {{staffToken}}

@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IProductOptionRepository, ProductOptionRepository>();
         services.AddScoped<IProductVariantRepository, ProductVariantRepository>();
+        services.AddScoped<ICatalogDashboardRepository, CatalogDashboardRepository>();
         services.AddSingleton<IProductImageStore>(provider => new LocalProductImageStore(
             configuration["ProductImages:StoragePath"] ?? Path.Combine(AppContext.BaseDirectory, "App_Data", "product-images"),
             provider.GetRequiredService<ILogger<LocalProductImageStore>>()));
