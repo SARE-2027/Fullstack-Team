@@ -8,4 +8,8 @@ public interface ISessionService
         string cartId,
         UpdateCartTelemetryRequest request,
         CancellationToken ct = default);
+
+    Task<CartSummaryResponse> StartSessionAsync(
+        StartSessionRequest request,
+        CancellationToken ct = default);
 }

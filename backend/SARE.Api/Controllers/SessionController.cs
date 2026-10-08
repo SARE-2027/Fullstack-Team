@@ -25,4 +25,25 @@ public class SessionController(ISessionService sessionService) : ControllerBase
             return NotFound(new { message = ex.Message });
         }
     }
+
+    // POST /api/sessions
+    [HttpPost("sessions")]
+    public async Task<IActionResult> StartSession(
+        [FromBody] StartSessionRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await sessionService.StartSessionAsync(request, ct);
+            return Created($"/api/sessions/{result.SessionId}", result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

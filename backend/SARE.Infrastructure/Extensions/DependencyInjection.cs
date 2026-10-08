@@ -37,6 +37,8 @@ public static class DependencyInjection
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<ISessionRepository, SessionRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<DbInitializer>();
 
         services.AddSingleton(TimeProvider.System);

@@ -1,9 +1,15 @@
 using SARE.Application.Common.Interfaces;
 using SARE.Application.DTOs.Cart;
+using SARE.Domain.Cart;
+using SARE.Domain.Enums;
+using SARE.Domain.Users;
 
 namespace SARE.Application.Services;
 
-public class SessionService(ICartRepository carts) : ISessionService
+public class SessionService(
+    ICartRepository carts,
+    ISessionRepository sessions,
+    IUserRepository users) : ISessionService
 {
     public async Task UpdateCartTelemetryAsync(
         string cartId,
@@ -22,5 +28,64 @@ public class SessionService(ICartRepository carts) : ISessionService
         cart.LastSeenAt = DateTime.UtcNow;
 
         await carts.UpdateAsync(cart, ct);
+    }
+
+    public async Task<CartSummaryResponse> StartSessionAsync(
+        StartSessionRequest request,
+        CancellationToken ct = default)
+    {
+        // 1. فحص وجود السلة وحالتها
+        var cart = await carts.GetByIdAsync(request.CartId, ct)
+            ?? throw new KeyNotFoundException($"العربة {request.CartId} غير موجودة");
+
+        if (cart.Status == CartStatus.Disabled)
+            throw new InvalidOperationException($"العربة {request.CartId} معطلة حالياً");
+
+        // 2. التأكد من عدم وجود جلسة نشطة على هذه السلة
+        var activeSession = await sessions.GetActiveByCartIdAsync(request.CartId, ct);
+        if (activeSession is not null)
+            throw new InvalidOperationException($"العربة {request.CartId} لديها جلسة نشطة بالفعل");
+
+        // 3. فحص كارت الـ NFC (إن وُجد) والوصول للمستخدم
+        User? user = null;
+        if (!string.IsNullOrWhiteSpace(request.NfcUid))
+        {
+            user = await users.GetByNfcUidAsync(request.NfcUid, ct)
+                ?? throw new KeyNotFoundException($"كارت الـ NFC ({request.NfcUid}) غير مسجل لأي مستخدم");
+
+            if (!user.IsActive)
+                throw new InvalidOperationException("حساب المستخدم المرتبط بهذا الكارت معطل");
+        }
+
+        // 4. إنشاء الجلسة الجديدة
+        var now = DateTime.UtcNow;
+        var session = new Session
+        {
+            Id = Guid.NewGuid(),
+            CartId = cart.Id,
+            UserId = user?.Id,
+            Status = SessionStatus.Open,
+            TotalMinor = 0,
+            StartedAt = now,
+            LastActivityAt = now
+        };
+
+        await sessions.AddAsync(session, ct);
+
+        // 5. تحديث آخر ظهور للعربة
+        cart.LastSeenAt = now;
+        await carts.UpdateAsync(cart, ct);
+
+        // 6. إرجاع ملخص الجلسة
+        return new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: user?.Id,
+            UserName: user?.Name,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: 0,
+            StartedAt: session.StartedAt
+        );
     }
 }
