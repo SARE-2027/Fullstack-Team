@@ -1,0 +1,23 @@
+# .NET build output
+bin/
+obj/
+artifacts/
+TestResults/
+*.nupkg
+
+# IDE and Editor files
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Secrets and local configurations
+.env
+.env.*
+!.env.example
+appsettings.Production.json
+appsettings.*.local.json

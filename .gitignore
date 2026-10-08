@@ -1,0 +1,10 @@
+# Root level editor and IDE files
+.vs/
+.idea/
+.vscode/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
