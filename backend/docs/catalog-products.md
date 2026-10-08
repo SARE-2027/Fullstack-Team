@@ -93,10 +93,10 @@ Both detail endpoints return a `product` object, `options`, and `variants`. Publ
 - `400`: Invalid body/query or a nonexistent category selected in a product request.
 - `401` / `403`: Authentication or permission failure on protected routes.
 - `404`: Missing product, or a product unavailable through a public detail URL.
-- `409`: The selected category was removed while the product operation was being saved.
+- `409`: The selected category was removed while saving, or another request changed the product while this request was being processed.
 
-Errors use Problem Details. The existing foreign key enforces category references, including concurrent changes. No new migration is needed.
+Errors use Problem Details. The existing foreign key enforces category references, including concurrent changes. Product timestamps are optimistic concurrency tokens; apply the `ProtectCatalogEdits` mapping migration along with the initial schema.
 
 Run `dotnet test backend/SARE.sln`. Integration tests use isolated SQLite databases and signed JWTs. They cover the role boundaries, persistence, search/filtering/sorting, public availability, nested option/variant visibility, timestamps, category validation, dashboards, and invoice preservation after deactivation. PostgreSQL concurrency exceptions are simulated; these tests do not connect to a live PostgreSQL database.
 
-See `SARE.Api/SARE.Api.http` for requests and [category documentation](catalog-categories.md) for development token setup. Image upload, option/value management, and variant management are subsequent endpoint groups; this feature reads existing related records and accepts an image URL.
+See `SARE.Api/SARE.Api.http` for requests and [category documentation](catalog-categories.md) for development token setup. [Option/value management](catalog-options.md), [variant management and barcode lookup](catalog-variants.md), [image uploads](catalog-images.md), and the [complete dashboard summary](catalog-dashboard.md) are implemented. The [catalog API index](catalog-api.md) lists the routes and access rules.

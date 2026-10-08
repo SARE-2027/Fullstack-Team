@@ -11,7 +11,7 @@ public sealed class VariantRequestValidator : AbstractValidator<VariantRequest>
         RuleFor(request => request.PriceMinor).GreaterThanOrEqualTo(0);
         RuleFor(request => request.WeightG).GreaterThan(0);
         RuleFor(request => request.OptionValueIds).NotNull();
-        RuleFor(request => request.OptionValueIds).Must(ids => ids!.Distinct().Count() == ids.Count)
+        RuleFor(request => request.OptionValueIds).Must(ids => ids is null || ids.Distinct().Count() == ids.Count)
             .When(request => request.OptionValueIds is not null).WithMessage("OptionValueIds must not contain duplicate IDs.");
         RuleForEach(request => request.OptionValueIds).NotEmpty();
     }
