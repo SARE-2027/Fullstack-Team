@@ -100,7 +100,7 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new NotFoundException("Product no longer exists.");
+            throw new ConflictException("Product data changed or no longer exists. Reload it and try again.");
         }
     }
 

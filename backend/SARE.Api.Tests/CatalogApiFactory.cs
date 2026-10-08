@@ -25,6 +25,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     private readonly SymmetricSecurityKey _signingKey = new(RandomNumberGenerator.GetBytes(32));
     public bool SimulateDeleteRace { get; set; }
     public bool SimulateProductCategoryRace { get; set; }
+    public bool SimulateCatalogWriteRace { get; set; }
 
     public CatalogApiFactory()
     {
@@ -84,9 +85,17 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     private sealed class DeleteRaceInterceptor(CatalogApiFactory factory) : SaveChangesInterceptor
     {
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
+            var changedProduct = eventData.Context!.ChangeTracker.Entries<Product>()
+                .FirstOrDefault(entry => entry.State == EntityState.Modified);
+            if (factory.SimulateCatalogWriteRace && changedProduct is not null)
+            {
+                factory.SimulateCatalogWriteRace = false;
+                await eventData.Context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE products SET updated_at = {DateTime.UtcNow.AddMinutes(1)}, name_en = {"Concurrent edit"} WHERE id = {changedProduct.Entity.Id}", cancellationToken);
+            }
             if ((factory.SimulateDeleteRace && eventData.Context!.ChangeTracker.Entries<Category>()
                     .Any(entry => entry.State == EntityState.Deleted))
                 || (factory.SimulateProductCategoryRace && eventData.Context!.ChangeTracker.Entries<Product>()
@@ -98,7 +107,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
                     constraintName: "fk_products_categories_category_id"));
             }
 
-            return base.SavingChangesAsync(eventData, result, cancellationToken);
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
         }
     }
 }
