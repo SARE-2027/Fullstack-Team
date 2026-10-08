@@ -6,6 +6,7 @@ using SARE.Application.Common.Interfaces;
 using SARE.Domain.Users;
 using SARE.Infrastructure.Authentication;
 using SARE.Infrastructure.Persistence;
+using SARE.Infrastructure.Persistence.Repositories;
 
 namespace SARE.Infrastructure.Extensions;
 
@@ -35,6 +36,7 @@ public static class DependencyInjection
 
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<DbInitializer>();
 
         services.AddSingleton(TimeProvider.System);
