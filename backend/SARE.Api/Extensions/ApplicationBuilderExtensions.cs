@@ -1,0 +1,38 @@
+using SARE.Infrastructure.Persistence;
+
+namespace SARE.Api.Extensions;
+
+public static class ApplicationBuilderExtensions
+{
+    public static WebApplication UseApiPipeline(this WebApplication app)
+    {
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
+
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        app.MapControllers();
+        app.MapGet("/", () => "SARE API is running!");
+
+        return app;
+    }
+
+    public static async Task SeedDatabaseAsync(this WebApplication app)
+    {
+        using var scope = app.Services.CreateScope();
+        try
+        {
+            var initializer = scope.ServiceProvider.GetRequiredService<DbInitializer>();
+            await initializer.SeedAsync();
+        }
+        catch (Exception ex)
+        {
+            var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("DatabaseInitializer");
+            logger.LogWarning(ex, "Could not run database initializer on startup. Make sure the database exists and migrations are applied.");
+        }
+    }
+}

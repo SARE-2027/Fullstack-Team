@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using SARE.Domain.Catalog;
 using SARE.Domain.Cart;
@@ -6,7 +8,8 @@ using CartEntity = SARE.Domain.Cart.Cart;
 
 namespace SARE.Infrastructure.Persistence;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? timeProvider = null) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? timeProvider = null)
+    : IdentityDbContext<User, Role, Guid>(options)
 {
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
@@ -16,12 +19,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? 
     public DbSet<ProductOptionValue> ProductOptionValues => Set<ProductOptionValue>();
     public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
     public DbSet<VariantOptionValue> VariantOptionValues => Set<VariantOptionValue>();
-    public DbSet<User> Users => Set<User>();
     public DbSet<CartEntity> Carts => Set<CartEntity>();
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<SessionItem> SessionItems => Set<SessionItem>();
     public DbSet<DetectionEvent> DetectionEvents => Set<DetectionEvent>();
     public DbSet<ShelfEvent> ShelfEvents => Set<ShelfEvent>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public override int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
@@ -64,6 +67,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? 
                 case User user when entry.State == EntityState.Added && user.CreatedAt == default:
                     user.CreatedAt = now;
                     break;
+                case RefreshToken refreshToken when entry.State == EntityState.Added && refreshToken.CreatedAtUtc == default:
+                    refreshToken.CreatedAtUtc = now;
+                    break;
                 case Session session:
                     if (entry.State == EntityState.Added && session.StartedAt == default)
                     {
@@ -92,6 +98,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>().ToTable("users");
+        modelBuilder.Entity<Role>().ToTable("roles");
+        modelBuilder.Entity<IdentityUserRole<Guid>>().ToTable("user_roles");
+        modelBuilder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims");
+        modelBuilder.Entity<IdentityUserLogin<Guid>>().ToTable("user_logins");
+        modelBuilder.Entity<IdentityRoleClaim<Guid>>().ToTable("user_role_claims");
+        modelBuilder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens");
+        modelBuilder.Entity<RefreshToken>().ToTable("refresh_tokens");
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }
