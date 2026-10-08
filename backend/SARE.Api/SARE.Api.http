@@ -3,6 +3,7 @@
 @categoryId = replace-with-id-from-create-response
 @productId = replace-with-id-from-product-create-response
 @staffToken = replace-with-your-development-staff-token
+@imageFile = replace-with-absolute-path-to-image.png
 
 ### User: list categories without a token
 GET {{baseUrl}}/api/v1/categories?page=1&pageSize=20
@@ -106,3 +107,19 @@ Content-Type: application/json
 ### Dashboard: staff or admin token
 GET {{baseUrl}}/api/v1/dashboard/products/summary
 Authorization: Bearer {{staffToken}}
+
+### Admin: upload or replace product image
+POST {{baseUrl}}/api/v1/admin/products/{{productId}}/image
+Authorization: Bearer {{adminToken}}
+Content-Type: multipart/form-data; boundary=sare-image
+
+--sare-image
+Content-Disposition: form-data; name="file"; filename="product.png"
+Content-Type: image/png
+
+< {{imageFile}}
+--sare-image--
+
+### Admin: remove product image
+DELETE {{baseUrl}}/api/v1/admin/products/{{productId}}/image
+Authorization: Bearer {{adminToken}}

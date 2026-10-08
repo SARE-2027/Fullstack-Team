@@ -10,6 +10,7 @@ namespace SARE.Application.Services;
 
 public sealed class ProductService(
     IProductRepository repository,
+    IProductImageStore imageStore,
     IValidator<ProductRequest> requestValidator,
     IValidator<ProductStatusRequest> statusValidator,
     IValidator<ProductQuery> queryValidator,
@@ -41,6 +42,7 @@ public sealed class ProductService(
     public async Task<ProductResponse> CreateAsync(ProductRequest request, CancellationToken cancellationToken)
     {
         request = await ValidateRequestAsync(request, cancellationToken);
+        ValidateManagedImageUrl(request.ImageUrl, null);
         var product = new Product
         {
             Id = Guid.NewGuid(), CategoryId = request.CategoryId,
@@ -57,12 +59,15 @@ public sealed class ProductService(
         request = await ValidateRequestAsync(request, cancellationToken);
         var product = await repository.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException("Product not found.");
+        ValidateManagedImageUrl(request.ImageUrl, product.ImageUrl);
+        var previousImage = product.ImageUrl;
         product.CategoryId = request.CategoryId;
         product.NameAr = request.NameAr!;
         product.NameEn = request.NameEn!;
         product.ImageUrl = request.ImageUrl;
         product.IsActive = request.IsActive;
         await repository.SaveChangesAsync(cancellationToken);
+        if (previousImage != product.ImageUrl) await imageStore.DeleteAsync(previousImage, CancellationToken.None);
         return await GetSummaryAsync(id, cancellationToken);
     }
 
@@ -90,5 +95,13 @@ public sealed class ProductService(
         if (!await repository.CategoryExistsAsync(request.CategoryId, cancellationToken))
             throw new ValidationException([new ValidationFailure(nameof(ProductRequest.CategoryId), "Category does not exist.")]);
         return request;
+    }
+
+    private static void ValidateManagedImageUrl(string? imageUrl, string? currentImageUrl)
+    {
+        if (imageUrl?.StartsWith(IProductImageStore.UrlPrefix, StringComparison.OrdinalIgnoreCase) == true
+            && imageUrl != currentImageUrl)
+            throw new ValidationException([new ValidationFailure(nameof(ProductRequest.ImageUrl),
+                "Use the image upload endpoint to assign a managed product image.")]);
     }
 }

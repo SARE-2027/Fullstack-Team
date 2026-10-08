@@ -14,6 +14,9 @@ using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using SARE.Domain.Catalog;
 using SARE.Infrastructure.Persistence;
+using SARE.Infrastructure.Storage;
+using SARE.Application.Common.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace SARE.Api.Tests;
 
@@ -26,6 +29,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     public bool SimulateDeleteRace { get; set; }
     public bool SimulateProductCategoryRace { get; set; }
     public bool SimulateCatalogWriteRace { get; set; }
+    public string ImageRoot { get; } = Path.Combine(Path.GetTempPath(), "sare-image-tests", Guid.NewGuid().ToString("N"));
 
     public CatalogApiFactory()
     {
@@ -43,6 +47,9 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection)
                 .AddInterceptors(new DeleteRaceInterceptor(this)));
+            services.RemoveAll<IProductImageStore>();
+            services.AddSingleton<IProductImageStore>(provider => new LocalProductImageStore(
+                ImageRoot, provider.GetRequiredService<ILogger<LocalProductImageStore>>()));
 
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
@@ -81,6 +88,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     {
         await base.DisposeAsync();
         await _connection.DisposeAsync();
+        if (Directory.Exists(ImageRoot)) Directory.Delete(ImageRoot, recursive: true);
     }
 
     private sealed class DeleteRaceInterceptor(CatalogApiFactory factory) : SaveChangesInterceptor

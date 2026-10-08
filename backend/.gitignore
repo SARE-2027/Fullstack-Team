@@ -15,6 +15,9 @@ TestResults/
 # Logs
 *.log
 
+# Uploaded product images
+App_Data/product-images/
+
 # Secrets and local configurations
 .env
 .env.*
