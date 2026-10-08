@@ -46,4 +46,34 @@ public class SessionController(ISessionService sessionService) : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    // GET /api/sessions/{id}
+    [HttpGet("sessions/{id:guid}")]
+    public async Task<IActionResult> GetSessionSummary(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var result = await sessionService.GetSessionSummaryAsync(id, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    // GET /api/carts/{cartId}/session
+    [HttpGet("carts/{cartId}/session")]
+    public async Task<IActionResult> GetActiveSessionByCart(string cartId, CancellationToken ct)
+    {
+        try
+        {
+            var result = await sessionService.GetActiveSessionByCartIdAsync(cartId, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
 }

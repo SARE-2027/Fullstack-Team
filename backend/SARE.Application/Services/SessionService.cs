@@ -85,7 +85,67 @@ public class SessionService(
             Status: session.Status.ToString().ToLowerInvariant(),
             TotalMinor: session.TotalMinor,
             ItemsCount: 0,
-            StartedAt: session.StartedAt
+            StartedAt: session.StartedAt,
+            Items: []
+        );
+    }
+
+    public async Task<CartSummaryResponse> GetSessionSummaryAsync(
+        Guid sessionId,
+        CancellationToken ct = default)
+    {
+        var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
+        if (session is null)
+            throw new KeyNotFoundException($"الجلسة {sessionId} غير موجودة");
+
+        string? userName = null;
+        if (session.UserId.HasValue)
+        {
+            var user = await users.GetByIdAsync(session.UserId.Value, ct);
+            userName = user?.Name;
+        }
+
+        return new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: session.UserId,
+            UserName: userName,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: items.Count,
+            StartedAt: session.StartedAt,
+            Items: items
+        );
+    }
+
+    public async Task<CartSummaryResponse> GetActiveSessionByCartIdAsync(
+        string cartId,
+        CancellationToken ct = default)
+    {
+        var cart = await carts.GetByIdAsync(cartId, ct)
+            ?? throw new KeyNotFoundException($"العربة {cartId} غير موجودة");
+
+        var (session, items) = await sessions.GetActiveWithItemsByCartIdAsync(cartId, ct);
+        if (session is null)
+            throw new KeyNotFoundException($"لا توجد جلسة نشطة للعربة {cartId} حالياً");
+
+        string? userName = null;
+        if (session.UserId.HasValue)
+        {
+            var user = await users.GetByIdAsync(session.UserId.Value, ct);
+            userName = user?.Name;
+        }
+
+        return new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: session.UserId,
+            UserName: userName,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: items.Count,
+            StartedAt: session.StartedAt,
+            Items: items
         );
     }
 }

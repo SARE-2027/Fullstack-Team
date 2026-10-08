@@ -12,4 +12,12 @@ public interface ISessionService
     Task<CartSummaryResponse> StartSessionAsync(
         StartSessionRequest request,
         CancellationToken ct = default);
+
+    Task<CartSummaryResponse> GetSessionSummaryAsync(
+        Guid sessionId,
+        CancellationToken ct = default);
+
+    Task<CartSummaryResponse> GetActiveSessionByCartIdAsync(
+        string cartId,
+        CancellationToken ct = default);
 }

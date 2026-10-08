@@ -8,5 +8,6 @@ public record CartSummaryResponse(
     string Status,
     int TotalMinor,
     int ItemsCount,
-    DateTime StartedAt
+    DateTime StartedAt,
+    IReadOnlyList<SessionItemDto> Items
 );
