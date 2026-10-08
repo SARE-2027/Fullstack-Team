@@ -12,7 +12,6 @@ public sealed class DetectionEventConfiguration : IEntityTypeConfiguration<Detec
         builder.ToTable(table =>
         {
             table.HasCheckConstraint("ck_detection_events_source", "source IN ('vision', 'scanner', 'manual')");
-            table.HasCheckConstraint("ck_detection_events_zone", "zone IN ('basket', 'tray')");
             table.HasCheckConstraint("ck_detection_events_outcome", "outcome IN ('accepted', 'corrected', 'rejected', 'unknown')");
             table.HasCheckConstraint("ck_detection_events_confidence", "confidence IS NULL OR confidence BETWEEN 0 AND 1");
         });
@@ -24,8 +23,6 @@ public sealed class DetectionEventConfiguration : IEntityTypeConfiguration<Detec
         builder.Property(detection => detection.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(detection => detection.Source)
             .HasConversion(new SnakeCaseEnumConverter<DetectionSource>());
-        builder.Property(detection => detection.Zone)
-            .HasConversion(new SnakeCaseEnumConverter<CartZone>());
         builder.Property(detection => detection.Outcome)
             .HasConversion(new SnakeCaseEnumConverter<DetectionOutcome>());
 

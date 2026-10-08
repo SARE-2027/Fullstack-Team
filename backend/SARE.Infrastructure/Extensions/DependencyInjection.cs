@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using SARE.Application.Common.Interfaces;
 using SARE.Infrastructure.Persistence;
+using SARE.Infrastructure.Persistence.Repositories;
 
 namespace SARE.Infrastructure.Extensions;
 
@@ -15,6 +17,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString));
 
         services.AddSingleton(TimeProvider.System);
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
 
         return services;
     }

@@ -201,7 +201,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                     variant_id = table.Column<Guid>(type: "uuid", nullable: false),
                     unit_price_minor = table.Column<int>(type: "integer", nullable: false),
                     source = table.Column<string>(type: "text", nullable: false),
-                    zone = table.Column<string>(type: "text", nullable: false),
                     added_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
                     removed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
@@ -211,7 +210,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                     table.CheckConstraint("ck_session_items_removed_at", "removed_at IS NULL OR removed_at >= added_at");
                     table.CheckConstraint("ck_session_items_source", "source IN ('vision', 'scanner', 'manual')");
                     table.CheckConstraint("ck_session_items_unit_price_minor", "unit_price_minor >= 0");
-                    table.CheckConstraint("ck_session_items_zone", "zone IN ('basket', 'tray')");
                     table.ForeignKey(
                         name: "fk_session_items_product_variants_variant_id",
                         column: x => x.variant_id,
@@ -288,7 +286,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                     session_id = table.Column<Guid>(type: "uuid", nullable: false),
                     session_item_id = table.Column<Guid>(type: "uuid", nullable: true),
                     source = table.Column<string>(type: "text", nullable: false),
-                    zone = table.Column<string>(type: "text", nullable: false),
                     detected_barcode = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                     confidence = table.Column<float>(type: "real", nullable: true),
                     weight_delta_g = table.Column<int>(type: "integer", nullable: false),
@@ -303,7 +300,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                     table.CheckConstraint("ck_detection_events_confidence", "confidence IS NULL OR confidence BETWEEN 0 AND 1");
                     table.CheckConstraint("ck_detection_events_outcome", "outcome IN ('accepted', 'corrected', 'rejected', 'unknown')");
                     table.CheckConstraint("ck_detection_events_source", "source IN ('vision', 'scanner', 'manual')");
-                    table.CheckConstraint("ck_detection_events_zone", "zone IN ('basket', 'tray')");
                     table.ForeignKey(
                         name: "fk_detection_events_session_items_session_item_id",
                         column: x => x.session_item_id,

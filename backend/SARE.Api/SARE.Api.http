@@ -1,0 +1,45 @@
+@baseUrl = http://localhost:5111
+@adminToken = replace-with-your-development-admin-token
+@categoryId = replace-with-id-from-create-response
+
+### User: list categories without a token
+GET {{baseUrl}}/api/v1/categories?page=1&pageSize=20
+
+### User: read category without a token
+GET {{baseUrl}}/api/v1/categories/{{categoryId}}
+
+### List categories
+GET {{baseUrl}}/api/v1/admin/categories?page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Search categories
+GET {{baseUrl}}/api/v1/admin/categories?search=drinks&page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Create category
+POST {{baseUrl}}/api/v1/admin/categories
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "nameAr": "مشروبات",
+  "nameEn": "Drinks"
+}
+
+### Read category
+GET {{baseUrl}}/api/v1/admin/categories/{{categoryId}}
+Authorization: Bearer {{adminToken}}
+
+### Update category
+PUT {{baseUrl}}/api/v1/admin/categories/{{categoryId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "nameAr": "مشروبات باردة",
+  "nameEn": "Cold drinks"
+}
+
+### Delete an empty category
+DELETE {{baseUrl}}/api/v1/admin/categories/{{categoryId}}
+Authorization: Bearer {{adminToken}}

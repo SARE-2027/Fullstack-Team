@@ -8,7 +8,6 @@ public class DetectionEvent : BaseEntity
     public Guid SessionId { get; set; }
     public Guid? SessionItemId { get; set; }
     public DetectionSource Source { get; set; }
-    public CartZone Zone { get; set; }
     public string? DetectedBarcode { get; set; }
     public float? Confidence { get; set; }
     public int WeightDeltaG { get; set; }
