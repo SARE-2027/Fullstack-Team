@@ -1,6 +1,8 @@
 @baseUrl = http://localhost:5111
 @adminToken = replace-with-your-development-admin-token
 @categoryId = replace-with-id-from-create-response
+@productId = replace-with-id-from-product-create-response
+@staffToken = replace-with-your-development-staff-token
 
 ### User: list categories without a token
 GET {{baseUrl}}/api/v1/categories?page=1&pageSize=20
@@ -43,3 +45,64 @@ Content-Type: application/json
 ### Delete an empty category
 DELETE {{baseUrl}}/api/v1/admin/categories/{{categoryId}}
 Authorization: Bearer {{adminToken}}
+
+### User: list available products
+GET {{baseUrl}}/api/v1/products?page=1&pageSize=20&sortBy=nameEn
+
+### User: available product details
+GET {{baseUrl}}/api/v1/products/{{productId}}
+
+### Staff: inspect products including inactive products
+GET {{baseUrl}}/api/v1/staff/products?page=1&pageSize=20
+Authorization: Bearer {{staffToken}}
+
+### Staff: product details
+GET {{baseUrl}}/api/v1/staff/products/{{productId}}
+Authorization: Bearer {{staffToken}}
+
+### Admin: list products
+GET {{baseUrl}}/api/v1/admin/products?categoryId={{categoryId}}&isActive=true&page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Admin: create product
+POST {{baseUrl}}/api/v1/admin/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "nameAr": "شيبسي",
+  "nameEn": "Chips",
+  "imageUrl": null,
+  "isActive": true
+}
+
+### Admin: product details, options and variants
+GET {{baseUrl}}/api/v1/admin/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+
+### Admin: update product
+PUT {{baseUrl}}/api/v1/admin/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "categoryId": "{{categoryId}}",
+  "nameAr": "شيبسي جبنة",
+  "nameEn": "Cheese chips",
+  "imageUrl": "/images/chips.jpg",
+  "isActive": true
+}
+
+### Admin: deactivate product
+PATCH {{baseUrl}}/api/v1/admin/products/{{productId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+### Dashboard: staff or admin token
+GET {{baseUrl}}/api/v1/dashboard/products/summary
+Authorization: Bearer {{staffToken}}

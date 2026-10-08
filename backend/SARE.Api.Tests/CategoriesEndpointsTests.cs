@@ -14,7 +14,7 @@ public sealed class CategoriesEndpointsTests : IAsyncLifetime
 {
     private const string Route = "/api/v1/admin/categories";
     private const string PublicRoute = "/api/v1/categories";
-    private readonly CategoriesApiFactory _factory = new();
+    private readonly CatalogApiFactory _factory = new();
     private HttpClient _client = null!;
 
     public async Task InitializeAsync()

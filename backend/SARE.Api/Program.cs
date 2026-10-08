@@ -13,7 +13,9 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireAuthenticatedUser().RequireRole("admin"));
+    .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireAuthenticatedUser().RequireRole("admin"))
+    .AddPolicy(AuthorizationPolicies.CatalogRead, policy => policy.RequireAuthenticatedUser().RequireRole("staff", "admin"))
+    .AddPolicy(AuthorizationPolicies.CatalogManage, policy => policy.RequireAuthenticatedUser().RequireRole("admin"));
 
 var app = builder.Build();
 

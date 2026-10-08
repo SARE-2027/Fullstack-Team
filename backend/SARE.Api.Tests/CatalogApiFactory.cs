@@ -17,15 +17,16 @@ using SARE.Infrastructure.Persistence;
 
 namespace SARE.Api.Tests;
 
-public sealed class CategoriesApiFactory : WebApplicationFactory<Program>
+public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 {
-    private const string Issuer = "sare-category-tests";
+    private const string Issuer = "sare-catalog-tests";
     private const string Audience = "sare-test-api";
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly SymmetricSecurityKey _signingKey = new(RandomNumberGenerator.GetBytes(32));
     public bool SimulateDeleteRace { get; set; }
+    public bool SimulateProductCategoryRace { get; set; }
 
-    public CategoriesApiFactory()
+    public CatalogApiFactory()
     {
         _connection.Open();
         _connection.CreateFunction("now", () => DateTime.UtcNow.ToString("O"));
@@ -81,13 +82,15 @@ public sealed class CategoriesApiFactory : WebApplicationFactory<Program>
         await _connection.DisposeAsync();
     }
 
-    private sealed class DeleteRaceInterceptor(CategoriesApiFactory factory) : SaveChangesInterceptor
+    private sealed class DeleteRaceInterceptor(CatalogApiFactory factory) : SaveChangesInterceptor
     {
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
-            if (factory.SimulateDeleteRace && eventData.Context!.ChangeTracker.Entries<Category>()
-                .Any(entry => entry.State == EntityState.Deleted))
+            if ((factory.SimulateDeleteRace && eventData.Context!.ChangeTracker.Entries<Category>()
+                    .Any(entry => entry.State == EntityState.Deleted))
+                || (factory.SimulateProductCategoryRace && eventData.Context!.ChangeTracker.Entries<Product>()
+                    .Any(entry => entry.State is EntityState.Added or EntityState.Modified)))
             {
                 // Simulate PostgreSQL rejecting a delete after a concurrent product insert.
                 throw new DbUpdateException("Concurrent product reference.", new PostgresException(
