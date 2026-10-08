@@ -148,4 +148,61 @@ public class SessionService(
             Items: items
         );
     }
+
+    public async Task<CartSummaryResponse> CloseSessionAsync(
+        Guid sessionId,
+        CloseSessionRequest? request = null,
+        CancellationToken ct = default)
+    {
+        // 1. جلب الجلسة مع أصنافها
+        var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
+        if (session is null)
+            throw new KeyNotFoundException($"الجلسة {sessionId} غير موجودة");
+
+        // 2. التحقق من أن الجلسة ما زالت مفتوحة
+        if (session.Status != SessionStatus.Open)
+            throw new InvalidOperationException($"الجلسة {sessionId} مغلقة بالفعل بحالة ({session.Status})");
+
+        // 3. التحقق من وجود الموظف المغلق (إن وجد)
+        if (request?.ClosedByUserId.HasValue == true)
+        {
+            var closer = await users.GetByIdAsync(request.ClosedByUserId.Value, ct);
+            if (closer is null)
+                throw new KeyNotFoundException($"الموظف {request.ClosedByUserId.Value} غير موجود في النظام");
+        }
+
+        // 4. تحديث حالة الجلسة ووقت الإغلاق
+        var now = DateTime.UtcNow;
+        session.Status = request?.Reason == CloseReason.Abandoned
+            ? SessionStatus.Abandoned
+            : SessionStatus.Closed;
+
+        session.ClosedAt = now;
+        session.LastActivityAt = now;
+        session.ClosedBy = request?.ClosedByUserId;
+        session.CloseReason = request?.Reason;
+
+        await sessions.UpdateAsync(session, ct);
+
+        // 5. جلب اسم المتسوق للعرض في الفاتورة
+        string? userName = null;
+        if (session.UserId.HasValue)
+        {
+            var user = await users.GetByIdAsync(session.UserId.Value, ct);
+            userName = user?.Name;
+        }
+
+        // 6. إرجاع ملخص الفاتورة المغلقة
+        return new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: session.UserId,
+            UserName: userName,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: items.Count,
+            StartedAt: session.StartedAt,
+            Items: items
+        );
+    }
 }

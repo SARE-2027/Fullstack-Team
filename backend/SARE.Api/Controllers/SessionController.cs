@@ -76,4 +76,26 @@ public class SessionController(ISessionService sessionService) : ControllerBase
             return NotFound(new { message = ex.Message });
         }
     }
+
+    // POST /api/sessions/{id:guid}/close
+    [HttpPost("sessions/{id:guid}/close")]
+    public async Task<IActionResult> CloseSession(
+        Guid id,
+        [FromBody] CloseSessionRequest? request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var result = await sessionService.CloseSessionAsync(id, request, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }

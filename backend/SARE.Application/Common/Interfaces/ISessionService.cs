@@ -20,4 +20,9 @@ public interface ISessionService
     Task<CartSummaryResponse> GetActiveSessionByCartIdAsync(
         string cartId,
         CancellationToken ct = default);
+
+    Task<CartSummaryResponse> CloseSessionAsync(
+        Guid sessionId,
+        CloseSessionRequest? request = null,
+        CancellationToken ct = default);
 }
