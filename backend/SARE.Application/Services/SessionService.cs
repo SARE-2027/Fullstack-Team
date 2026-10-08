@@ -11,7 +11,7 @@ public class SessionService(
     ISessionRepository sessions,
     IUserRepository users) : ISessionService
 {
-    public async Task UpdateCartTelemetryAsync(
+    public async Task<CartTelemetryResponse> UpdateCartTelemetryAsync(
         string cartId,
         UpdateCartTelemetryRequest request,
         CancellationToken ct = default)
@@ -25,9 +25,46 @@ public class SessionService(
         if (request.SwVersion is not null)
             cart.SwVersion = request.SwVersion;
 
-        cart.LastSeenAt = DateTime.UtcNow;
+        // 1. تحديث الحالة إذا تم تمريرها صراحة
+        if (request.Status is not null)
+        {
+            cart.Status = request.Status.Value;
+        }
+        // 2. حماية تلقائية: إذا كانت البطارية حرجة (<= 10) ولم تُحدد الحالة، تُعطل العربة تلقائياً
+        else if (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
+        {
+            cart.Status = CartStatus.Disabled;
+        }
+
+        var now = DateTime.UtcNow;
+        cart.LastSeenAt = now;
 
         await carts.UpdateAsync(cart, ct);
+
+        // 3. حساب الفاصل الزمني الذكي للنبضة التالية
+        var activeSession = await sessions.GetActiveByCartIdAsync(cartId, ct);
+
+        int intervalSeconds;
+        if (cart.Status == CartStatus.Disabled || (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 15))
+        {
+            intervalSeconds = 60; // وضع حرج أو معطلة: فحص كل دقيقة لمتابعة الشحن
+        }
+        else if (activeSession is not null)
+        {
+            intervalSeconds = 120; // جلسة تسوق نشطة: فحص كل دقيقتين
+        }
+        else
+        {
+            intervalSeconds = 300; // وضع الاستعداد السليم: فحص كل 5 دقائق
+        }
+
+        return new CartTelemetryResponse(
+            CartId: cart.Id,
+            Status: cart.Status.ToString().ToLowerInvariant(),
+            BatteryPct: cart.BatteryPct,
+            NextReportIntervalSeconds: intervalSeconds,
+            AcknowledgedAt: now
+        );
     }
 
     public async Task<CartSummaryResponse> StartSessionAsync(

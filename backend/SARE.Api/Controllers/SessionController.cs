@@ -17,8 +17,8 @@ public class SessionController(ISessionService sessionService) : ControllerBase
     {
         try
         {
-            await sessionService.UpdateCartTelemetryAsync(cartId, request, ct);
-            return NoContent();
+            var result = await sessionService.UpdateCartTelemetryAsync(cartId, request, ct);
+            return Ok(result);
         }
         catch (KeyNotFoundException ex)
         {

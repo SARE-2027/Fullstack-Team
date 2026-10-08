@@ -4,7 +4,7 @@ namespace SARE.Application.Common.Interfaces;
 
 public interface ISessionService
 {
-    Task UpdateCartTelemetryAsync(
+    Task<CartTelemetryResponse> UpdateCartTelemetryAsync(
         string cartId,
         UpdateCartTelemetryRequest request,
         CancellationToken ct = default);
