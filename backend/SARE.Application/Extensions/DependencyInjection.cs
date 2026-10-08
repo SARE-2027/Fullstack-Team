@@ -10,6 +10,7 @@ public static class DependencyInjection
     {
         services.AddScoped<CategoryService>();
         services.AddScoped<ProductService>();
+        services.AddScoped<ProductOptionService>();
         services.AddValidatorsFromAssemblyContaining<CategoryService>();
         return services;
     }
