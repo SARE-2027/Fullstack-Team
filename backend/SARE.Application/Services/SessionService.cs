@@ -51,15 +51,23 @@ public class SessionService(
         if (request.SwVersion is not null)
             cart.SwVersion = request.SwVersion;
 
+        // 3. فحص ما إذا كانت هناك جلسة تسوق نشطة على العربة حالياً
+        var activeSession = await sessions.GetActiveByCartIdAsync(cartId, ct);
+
         // 1. تحديث الحالة إذا تم تمريرها صراحة
         if (request.Status is not null)
         {
             cart.Status = request.Status.Value;
         }
-        // 2. حماية تلقائية: إذا كانت البطارية حرجة (<= 10) ولم تُحدد الحالة، تُعطل العربة تلقائياً
+        // 2. حماية تلقائية: إذا كانت البطارية حرجة (<= 10) ولم تُحدد الحالة صراحة:
+        // إذا كان هناك متسوق يستخدمها حالياً، لا تُعطل العربة ويكمل تسوقه دون انقطاع.
+        // تُعطل فقط في حالة عدم وجود جلسة نشطة لمنع أي متسوق جديد من أخذها.
         else if (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
         {
-            cart.Status = CartStatus.Disabled;
+            if (activeSession is null)
+            {
+                cart.Status = CartStatus.Disabled;
+            }
         }
 
         var now = DateTime.UtcNow;
@@ -72,9 +80,6 @@ public class SessionService(
         {
             await cartNotifications.NotifyLowBatteryAsync(cart.Id, cart.BatteryPct.Value, ct);
         }
-
-        // 3. حساب الفاصل الزمني الذكي للنبضة التالية
-        var activeSession = await sessions.GetActiveByCartIdAsync(cartId, ct);
 
         int intervalSeconds;
         if (cart.Status == CartStatus.Disabled || (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 15))
@@ -146,13 +151,8 @@ public class SessionService(
             LastActivityAt = now
         };
 
-        // معاملة ذرية تضمن إضافة الجلسة وتحديث السلة معاً دون تجزئة
-        await uow.ExecuteTransactionAsync(async () =>
-        {
-            await sessions.AddAsync(session, ct);
-            cart.LastSeenAt = now;
-            await carts.UpdateAsync(cart, ct);
-        }, ct);
+        // إضافة الجلسة كعملية ذرية نقية (تحديث LastSeenAt يخص فقط إشارات الـ Telemetry الحقيقية من العربة)
+        await sessions.AddAsync(session, ct);
 
         // 5. إرجاع ملخص الجلسة وإشعار شاشة العربة
         var summary = new CartSummaryResponse(
@@ -269,14 +269,25 @@ public class SessionService(
         session.ClosedAt = now;
         session.LastActivityAt = now;
         session.ClosedBy = request?.ClosedByUserId;
-        session.CloseReason = request?.Reason;
+        session.CloseReason = request?.Reason ?? (request?.ClosedByUserId.HasValue == true ? CloseReason.StaffClosed : null);
 
         // إعادة احتساب إجمالي الفاتورة المالي الفعلي من واقع أصناف السلة النشطة لضمان النزاهة المالية
         session.TotalMinor = items.Sum(i => i.UnitPriceMinor);
 
+        // بعد انتهاء جلسة المتسوق بنجاح: إذا كانت البطارية منخفضة جداً، تُعطل العربة الآن لمنع أي متسوق تالٍ من أخذها
+        var cart = await carts.GetByIdAsync(session.CartId, ct);
+        if (cart is not null && cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
+        {
+            cart.Status = CartStatus.Disabled;
+        }
+
         await uow.ExecuteTransactionAsync(async () =>
         {
             await sessions.UpdateAsync(session, ct);
+            if (cart is not null)
+            {
+                await carts.UpdateAsync(cart, ct);
+            }
         }, ct);
 
         // 5. جلب اسم المتسوق للعرض في الفاتورة
