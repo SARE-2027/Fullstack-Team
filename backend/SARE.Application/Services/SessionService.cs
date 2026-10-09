@@ -1,4 +1,6 @@
 using FluentValidation;
+using SARE.Application.Common.Exceptions;
+using ValidationException = SARE.Application.Common.Exceptions.ValidationException;
 using SARE.Application.Common.Interfaces;
 using SARE.Application.Common.Security;
 using SARE.Application.DTOs.Cart;
@@ -32,14 +34,14 @@ public class SessionService(
         }
 
         var cart = await carts.GetByIdAsync(cartId, ct)
-            ?? throw new KeyNotFoundException($"العربة {cartId} غير موجودة");
+            ?? throw new NotFoundException("Cart", cartId);
 
         // التحقق من رمز مصادقة هاردوير العربة
         if (!string.IsNullOrWhiteSpace(cart.TokenHash))
         {
             if (string.IsNullOrWhiteSpace(hardwareToken) || !TokenHasher.VerifyToken(hardwareToken, cart.TokenHash))
             {
-                throw new UnauthorizedAccessException("رمز مصادقة العربة (X-Cart-Token) غير صالح أو مفقود");
+                throw new UnauthorizedException("رمز مصادقة العربة (X-Cart-Token) غير صالح أو مفقود", "INVALID_CART_TOKEN");
             }
         }
 
@@ -110,25 +112,25 @@ public class SessionService(
 
         // 1. فحص وجود السلة وحالتها
         var cart = await carts.GetByIdAsync(request.CartId, ct)
-            ?? throw new KeyNotFoundException($"العربة {request.CartId} غير موجودة");
+            ?? throw new NotFoundException("Cart", request.CartId);
 
         if (cart.Status == CartStatus.Disabled)
-            throw new InvalidOperationException($"العربة {request.CartId} معطلة حالياً");
+            throw new BusinessRuleException($"العربة {request.CartId} معطلة حالياً");
 
         // 2. التأكد من عدم وجود جلسة نشطة على هذه السلة
         var activeSession = await sessions.GetActiveByCartIdAsync(request.CartId, ct);
         if (activeSession is not null)
-            throw new InvalidOperationException($"العربة {request.CartId} لديها جلسة نشطة بالفعل");
+            throw new ConflictException($"العربة {request.CartId} لديها جلسة نشطة بالفعل");
 
         // 3. فحص كارت الـ NFC (إن وُجد) والوصول للمستخدم
         User? user = null;
         if (!string.IsNullOrWhiteSpace(request.NfcUid))
         {
             user = await users.GetByNfcUidAsync(request.NfcUid, ct)
-                ?? throw new KeyNotFoundException($"كارت الـ NFC ({request.NfcUid}) غير مسجل لأي مستخدم");
+                ?? throw new NotFoundException($"كارت الـ NFC ({request.NfcUid}) غير مسجل لأي مستخدم");
 
             if (!user.IsActive)
-                throw new InvalidOperationException("حساب المستخدم المرتبط بهذا الكارت معطل");
+                throw new BusinessRuleException("حساب المستخدم المرتبط بهذا الكارت معطل");
         }
 
         // 4. إنشاء الجلسة الجديدة
@@ -176,7 +178,7 @@ public class SessionService(
     {
         var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
         if (session is null)
-            throw new KeyNotFoundException($"الجلسة {sessionId} غير موجودة");
+            throw new NotFoundException("Session", sessionId);
 
         string? userName = null;
         if (session.UserId.HasValue)
@@ -203,11 +205,11 @@ public class SessionService(
         CancellationToken ct = default)
     {
         var cart = await carts.GetByIdAsync(cartId, ct)
-            ?? throw new KeyNotFoundException($"العربة {cartId} غير موجودة");
+            ?? throw new NotFoundException("Cart", cartId);
 
         var (session, items) = await sessions.GetActiveWithItemsByCartIdAsync(cartId, ct);
         if (session is null)
-            throw new KeyNotFoundException($"لا توجد جلسة نشطة للعربة {cartId} حالياً");
+            throw new NotFoundException($"لا توجد جلسة نشطة للعربة {cartId} حالياً");
 
         string? userName = null;
         if (session.UserId.HasValue)
@@ -244,18 +246,18 @@ public class SessionService(
         // 1. جلب الجلسة مع أصنافها
         var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
         if (session is null)
-            throw new KeyNotFoundException($"الجلسة {sessionId} غير موجودة");
+            throw new NotFoundException("Session", sessionId);
 
         // 2. التحقق من أن الجلسة ما زالت مفتوحة
         if (session.Status != SessionStatus.Open)
-            throw new InvalidOperationException($"الجلسة {sessionId} مغلقة بالفعل بحالة ({session.Status})");
+            throw new ConflictException($"الجلسة {sessionId} مغلقة بالفعل بحالة ({session.Status})");
 
         // 3. التحقق من وجود الموظف المغلق (إن وجد)
         if (request?.ClosedByUserId.HasValue == true)
         {
             var closer = await users.GetByIdAsync(request.ClosedByUserId.Value, ct);
             if (closer is null)
-                throw new KeyNotFoundException($"الموظف {request.ClosedByUserId.Value} غير موجود في النظام");
+                throw new NotFoundException("User", request.ClosedByUserId.Value);
         }
 
         // 4. تحديث حالة الجلسة ووقت الإغلاق
