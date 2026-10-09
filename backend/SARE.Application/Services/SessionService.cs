@@ -1,4 +1,6 @@
+using FluentValidation;
 using SARE.Application.Common.Interfaces;
+using SARE.Application.Common.Security;
 using SARE.Application.DTOs.Cart;
 using SARE.Domain.Cart;
 using SARE.Domain.Enums;
@@ -9,15 +11,37 @@ namespace SARE.Application.Services;
 public class SessionService(
     ICartRepository carts,
     ISessionRepository sessions,
-    IUserRepository users) : ISessionService
+    IUserRepository users,
+    ICartNotificationService cartNotifications,
+    IUnitOfWork uow,
+    IValidator<StartSessionRequest>? startValidator = null,
+    IValidator<CloseSessionRequest>? closeValidator = null,
+    IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null) : ISessionService
 {
     public async Task<CartTelemetryResponse> UpdateCartTelemetryAsync(
         string cartId,
         UpdateCartTelemetryRequest request,
+        string? hardwareToken = null,
         CancellationToken ct = default)
     {
+        if (telemetryValidator is not null)
+        {
+            var valResult = await telemetryValidator.ValidateAsync(request, ct);
+            if (!valResult.IsValid)
+                throw new ValidationException(valResult.Errors);
+        }
+
         var cart = await carts.GetByIdAsync(cartId, ct)
             ?? throw new KeyNotFoundException($"العربة {cartId} غير موجودة");
+
+        // التحقق من رمز مصادقة هاردوير العربة
+        if (!string.IsNullOrWhiteSpace(cart.TokenHash))
+        {
+            if (string.IsNullOrWhiteSpace(hardwareToken) || !TokenHasher.VerifyToken(hardwareToken, cart.TokenHash))
+            {
+                throw new UnauthorizedAccessException("رمز مصادقة العربة (X-Cart-Token) غير صالح أو مفقود");
+            }
+        }
 
         if (request.BatteryPct is not null)
             cart.BatteryPct = request.BatteryPct;
@@ -40,6 +64,12 @@ public class SessionService(
         cart.LastSeenAt = now;
 
         await carts.UpdateAsync(cart, ct);
+
+        // إشعار شاشة العربة في حالة انخفاض البطارية للوضع الحرج
+        if (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
+        {
+            await cartNotifications.NotifyLowBatteryAsync(cart.Id, cart.BatteryPct.Value, ct);
+        }
 
         // 3. حساب الفاصل الزمني الذكي للنبضة التالية
         var activeSession = await sessions.GetActiveByCartIdAsync(cartId, ct);
@@ -71,6 +101,13 @@ public class SessionService(
         StartSessionRequest request,
         CancellationToken ct = default)
     {
+        if (startValidator is not null)
+        {
+            var valResult = await startValidator.ValidateAsync(request, ct);
+            if (!valResult.IsValid)
+                throw new ValidationException(valResult.Errors);
+        }
+
         // 1. فحص وجود السلة وحالتها
         var cart = await carts.GetByIdAsync(request.CartId, ct)
             ?? throw new KeyNotFoundException($"العربة {request.CartId} غير موجودة");
@@ -107,14 +144,16 @@ public class SessionService(
             LastActivityAt = now
         };
 
-        await sessions.AddAsync(session, ct);
+        // معاملة ذرية تضمن إضافة الجلسة وتحديث السلة معاً دون تجزئة
+        await uow.ExecuteTransactionAsync(async () =>
+        {
+            await sessions.AddAsync(session, ct);
+            cart.LastSeenAt = now;
+            await carts.UpdateAsync(cart, ct);
+        }, ct);
 
-        // 5. تحديث آخر ظهور للعربة
-        cart.LastSeenAt = now;
-        await carts.UpdateAsync(cart, ct);
-
-        // 6. إرجاع ملخص الجلسة
-        return new CartSummaryResponse(
+        // 5. إرجاع ملخص الجلسة وإشعار شاشة العربة
+        var summary = new CartSummaryResponse(
             SessionId: session.Id,
             CartId: session.CartId,
             UserId: user?.Id,
@@ -125,6 +164,10 @@ public class SessionService(
             StartedAt: session.StartedAt,
             Items: []
         );
+
+        await cartNotifications.NotifySessionStartedAsync(cart.Id, summary, ct);
+
+        return summary;
     }
 
     public async Task<CartSummaryResponse> GetSessionSummaryAsync(
@@ -191,6 +234,13 @@ public class SessionService(
         CloseSessionRequest? request = null,
         CancellationToken ct = default)
     {
+        if (request is not null && closeValidator is not null)
+        {
+            var valResult = await closeValidator.ValidateAsync(request, ct);
+            if (!valResult.IsValid)
+                throw new ValidationException(valResult.Errors);
+        }
+
         // 1. جلب الجلسة مع أصنافها
         var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
         if (session is null)
@@ -219,7 +269,13 @@ public class SessionService(
         session.ClosedBy = request?.ClosedByUserId;
         session.CloseReason = request?.Reason;
 
-        await sessions.UpdateAsync(session, ct);
+        // إعادة احتساب إجمالي الفاتورة المالي الفعلي من واقع أصناف السلة النشطة لضمان النزاهة المالية
+        session.TotalMinor = items.Sum(i => i.UnitPriceMinor);
+
+        await uow.ExecuteTransactionAsync(async () =>
+        {
+            await sessions.UpdateAsync(session, ct);
+        }, ct);
 
         // 5. جلب اسم المتسوق للعرض في الفاتورة
         string? userName = null;
@@ -229,8 +285,8 @@ public class SessionService(
             userName = user?.Name;
         }
 
-        // 6. إرجاع ملخص الفاتورة المغلقة
-        return new CartSummaryResponse(
+        // 6. إرجاع ملخص الفاتورة المغلقة وإشعار شاشة العربة
+        var summary = new CartSummaryResponse(
             SessionId: session.Id,
             CartId: session.CartId,
             UserId: session.UserId,
@@ -241,5 +297,9 @@ public class SessionService(
             StartedAt: session.StartedAt,
             Items: items
         );
+
+        await cartNotifications.NotifySessionClosedAsync(session.CartId, summary, ct);
+
+        return summary;
     }
 }

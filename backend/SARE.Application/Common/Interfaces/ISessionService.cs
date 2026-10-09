@@ -7,6 +7,7 @@ public interface ISessionService
     Task<CartTelemetryResponse> UpdateCartTelemetryAsync(
         string cartId,
         UpdateCartTelemetryRequest request,
+        string? hardwareToken = null,
         CancellationToken ct = default);
 
     Task<CartSummaryResponse> StartSessionAsync(

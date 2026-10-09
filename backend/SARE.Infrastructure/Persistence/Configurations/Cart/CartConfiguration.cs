@@ -21,5 +21,7 @@ public sealed class CartConfiguration : IEntityTypeConfiguration<CartEntity>
 
         builder.Property(cart => cart.Status)
             .HasConversion(new SnakeCaseEnumConverter<CartStatus>());
+
+        builder.Property<uint>("Version").IsRowVersion();
     }
 }

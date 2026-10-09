@@ -8,7 +8,7 @@ public class CloseSessionRequestValidator : AbstractValidator<CloseSessionReques
     public CloseSessionRequestValidator()
     {
         RuleFor(x => x.ClosedByUserId)
-            .NotEmpty().WithMessage("معرف المستخدم لا يمكن أن يكون فارغاً عند تمريره")
+            .Must(id => id != Guid.Empty).WithMessage("معرف المستخدم لا يمكن أن يكون فارغاً عند تمريره")
             .When(x => x.ClosedByUserId.HasValue);
 
         RuleFor(x => x.Reason)

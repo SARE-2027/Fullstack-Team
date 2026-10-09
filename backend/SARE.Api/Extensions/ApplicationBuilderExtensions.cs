@@ -6,6 +6,8 @@ public static class ApplicationBuilderExtensions
 {
     public static WebApplication UseApiPipeline(this WebApplication app)
     {
+        app.UseExceptionHandler();
+
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
@@ -16,6 +18,7 @@ public static class ApplicationBuilderExtensions
         app.UseAuthorization();
 
         app.MapControllers();
+        app.MapHub<SARE.Api.Hubs.CartHub>("/hubs/cart");
         app.MapGet("/", () => "SARE API is running!");
 
         return app;

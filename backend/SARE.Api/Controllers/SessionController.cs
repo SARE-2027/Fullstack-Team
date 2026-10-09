@@ -13,17 +13,11 @@ public class SessionController(ISessionService sessionService) : ControllerBase
     public async Task<IActionResult> UpdateCartTelemetry(
         string cartId,
         [FromBody] UpdateCartTelemetryRequest request,
+        [FromHeader(Name = "X-Cart-Token")] string? cartToken,
         CancellationToken ct)
     {
-        try
-        {
-            var result = await sessionService.UpdateCartTelemetryAsync(cartId, request, ct);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await sessionService.UpdateCartTelemetryAsync(cartId, request, cartToken, ct);
+        return Ok(result);
     }
 
     // POST /api/sessions
@@ -32,49 +26,24 @@ public class SessionController(ISessionService sessionService) : ControllerBase
         [FromBody] StartSessionRequest request,
         CancellationToken ct)
     {
-        try
-        {
-            var result = await sessionService.StartSessionAsync(request, ct);
-            return Created($"/api/sessions/{result.SessionId}", result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await sessionService.StartSessionAsync(request, ct);
+        return Created($"/api/sessions/{result.SessionId}", result);
     }
 
     // GET /api/sessions/{id}
     [HttpGet("sessions/{id:guid}")]
     public async Task<IActionResult> GetSessionSummary(Guid id, CancellationToken ct)
     {
-        try
-        {
-            var result = await sessionService.GetSessionSummaryAsync(id, ct);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await sessionService.GetSessionSummaryAsync(id, ct);
+        return Ok(result);
     }
 
     // GET /api/carts/{cartId}/session
     [HttpGet("carts/{cartId}/session")]
     public async Task<IActionResult> GetActiveSessionByCart(string cartId, CancellationToken ct)
     {
-        try
-        {
-            var result = await sessionService.GetActiveSessionByCartIdAsync(cartId, ct);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
+        var result = await sessionService.GetActiveSessionByCartIdAsync(cartId, ct);
+        return Ok(result);
     }
 
     // POST /api/sessions/{id:guid}/close
@@ -84,18 +53,7 @@ public class SessionController(ISessionService sessionService) : ControllerBase
         [FromBody] CloseSessionRequest? request,
         CancellationToken ct)
     {
-        try
-        {
-            var result = await sessionService.CloseSessionAsync(id, request, ct);
-            return Ok(result);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var result = await sessionService.CloseSessionAsync(id, request, ct);
+        return Ok(result);
     }
 }

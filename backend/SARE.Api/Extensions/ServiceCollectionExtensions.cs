@@ -16,6 +16,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
         services.AddControllers();
+        services.AddProblemDetails();
+        services.AddExceptionHandler<SARE.Api.Middlewares.GlobalExceptionHandler>();
+        services.AddSignalR();
+        services.AddScoped<ICartNotificationService, CartNotificationService>();
 
         services.AddJwtAuthentication(configuration);
         services.AddSwaggerDocumentation();
