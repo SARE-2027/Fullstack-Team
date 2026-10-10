@@ -6,8 +6,28 @@ namespace SARE.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class CartController(ICartService cartService) : ControllerBase
+public class CartController(ICartService cartService, ISessionService sessionService) : ControllerBase
 {
+    // PATCH: /api/carts/{cartId}
+    [HttpPatch("/api/carts/{cartId}")]
+    public async Task<IActionResult> UpdateCartTelemetry(
+        string cartId,
+        [FromBody] UpdateCartTelemetryRequest request,
+        [FromHeader(Name = "X-Cart-Token")] string? cartToken,
+        CancellationToken ct)
+    {
+        var result = await sessionService.UpdateCartTelemetryAsync(cartId, request, cartToken, ct);
+        return Ok(result);
+    }
+
+    // GET: /api/carts/{cartId}/session
+    [HttpGet("/api/carts/{cartId}/session")]
+    public async Task<IActionResult> GetActiveSessionByCart(string cartId, CancellationToken ct)
+    {
+        var result = await sessionService.GetActiveSessionByCartIdAsync(cartId, ct);
+        return Ok(result);
+    }
+
     // POST: api/cart/session/start
     [HttpPost("session/start")]
     public async Task<ActionResult<CartSessionResponseDto>> StartSession(

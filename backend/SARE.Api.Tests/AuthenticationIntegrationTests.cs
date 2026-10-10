@@ -35,7 +35,7 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         SetToken(auth.AccessToken);
         Assert.Equal(auth.Id, (await _client.GetFromJsonAsync<UserDto>("/api/auth/me"))!.Id);
         Assert.Equal(HttpStatusCode.Forbidden, (await _client.GetAsync("/api/v1/admin/categories")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync("/api/products", new CreateProductRequest("Name", "Name", Guid.NewGuid(), "code", 10, 10, null))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await _client.PostAsJsonAsync("/api/v1/admin/products", new ProductRequest(Guid.NewGuid(), "Name", "Name", null))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest("customer@example.com", "wrong"))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _client.PostAsJsonAsync("/api/auth/login-nfc", new NfcLoginRequest("NFC-123"))).StatusCode);
         var refresh = await _client.PostAsJsonAsync("/api/auth/refresh", new RefreshTokenRequest(auth.AccessToken, auth.RefreshToken));
@@ -60,29 +60,6 @@ public sealed class AuthenticationIntegrationTests : IAsyncLifetime
         Assert.Equal(managementStatus, (await _client.GetAsync("/api/v1/admin/categories")).StatusCode);
     }
 
-    [Fact]
-    public async Task LegacyCatalogAndVersionedCatalogShareDataAndAvailabilityRules()
-    {
-        SetToken((await CreateRoleUserAsync(UserRoles.Admin)).AccessToken);
-        var categoryResponse = await _client.PostAsJsonAsync("/api/v1/admin/categories", new CategoryRequest("تصنيف", "Category"));
-        var category = (await categoryResponse.Content.ReadFromJsonAsync<CategoryResponse>())!;
-        var request = new CreateProductRequest(" منتج ", " Product ", category.Id, " code-1 ", 100, 50, null);
-        var response = await _client.PostAsJsonAsync("/api/products", request);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var product = (await response.Content.ReadFromJsonAsync<ProductResponseDto>())!;
-        Assert.Equal("Product", product.NameEn);
-        Assert.Single(product.Variants);
-        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync(response.Headers.Location)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync($"/api/v1/products/{product.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/api/v1/variants/by-barcode?barcode=code-1")).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/products", request)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync("/api/products", request with { Barcode = "code-2", WeightG = 0 })).StatusCode);
-        await _factory.InDatabaseAsync(async db => Assert.Equal(1, await db.Products.CountAsync()));
-        await _client.PatchAsJsonAsync($"/api/v1/admin/products/{product.Id}/status", new ProductStatusRequest(false));
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/api/products/{product.Id}")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/products/by-barcode/code-1")).StatusCode);
-        Assert.Empty((await _client.GetFromJsonAsync<List<ProductResponseDto>>("/api/products"))!);
-    }
 
     private async Task<AuthResponse> CreateRoleUserAsync(string role)
     {

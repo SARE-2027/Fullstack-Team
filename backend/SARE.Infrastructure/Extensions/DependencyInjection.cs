@@ -9,7 +9,6 @@ using SARE.Infrastructure.Storage;
 using Microsoft.Extensions.Logging;
 using SARE.Domain.Users;
 using SARE.Infrastructure.Authentication;
-using SARE.Infrastructure.Services;
 
 namespace SARE.Infrastructure.Extensions;
 
@@ -39,8 +38,6 @@ public static class DependencyInjection
 
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IAuthService, AuthService>();
-        services.AddScoped<IProductService, ProductService>();
-        services.AddScoped<ICartService, CartService>();
         services.AddScoped<ICartRepository, CartRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
