@@ -17,7 +17,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
-        services.AddScoped<ICartNotificationService, SignalRCartNotificationService>();
+        services.AddScoped<ICartNotificationService, CartNotificationService>();
 
         services.AddControllers();
         services.AddProblemDetails();
@@ -55,6 +55,16 @@ public static class ServiceCollectionExtensions
         {
             options.RequireHttpsMetadata = false;
             options.SaveToken = true;
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/hubs/cart") &&
+                        context.Request.Query.TryGetValue("access_token", out var token))
+                        context.Token = token;
+                    return Task.CompletedTask;
+                }
+            };
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = !string.IsNullOrWhiteSpace(jwtSection["Issuer"]),

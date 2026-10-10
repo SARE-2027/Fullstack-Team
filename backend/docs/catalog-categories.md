@@ -2,7 +2,7 @@
 
 Admin base route: `/api/v1/admin/categories`.
 
-The five admin endpoints require a valid JWT bearer token with the `admin` role (lowercase, matching the domain role). Login and token issuance are a separate feature; these endpoints do not issue tokens.
+The five admin endpoints require a valid JWT bearer token with the Identity `Admin` role. The existing lowercase `admin` development role is also accepted. Login and token issuance are available under `/api/auth` after the integration merge.
 
 Users and guests can read categories through `/api/v1/categories`, without an admin role or a token. These routes support GET only and return the category ID and both names. All categories are readable, including empty categories, since the category model has no visibility/status field. Administrative product counts are returned only by the admin routes.
 
@@ -93,13 +93,18 @@ dotnet ef database update --project backend/SARE.Infrastructure --startup-projec
 dotnet run --project backend/SARE.Api --launch-profile http
 ```
 
-Generate a development admin token in another terminal:
+In Development, the initializer creates roles and the configured default admin. Log in using `DefaultAdmin:Email` and `DefaultAdmin:Password` from your local configuration:
 
-```powershell
-dotnet user-jwts create --project backend/SARE.Api --role admin
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{ "email": "your-admin-email", "password": "your-local-admin-password" }
 ```
 
-Send the returned token as `Authorization: Bearer <token>`. Development signing keys are stored in user secrets. The command also sets local issuer/audience configuration. Production must configure a trusted token issuer and verification keys; the development token command is for local use. See [Microsoft's development JWT documentation](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/jwt-authn?view=aspnetcore-10.0).
+Send the returned `accessToken` as `Authorization: Bearer <token>`. JWT generation and validation share `Jwt:SecretKey`, `Jwt:Issuer`, and `Jwt:Audience`. Keep local overrides in User Secrets. The earlier `dotnet user-jwts` setup does not automatically share the integrated authentication feature's signing key.
+
+See [integration notes](integration-startup.md) before applying migrations to a database created from an older branch.
 
 Request examples are available in `SARE.Api/SARE.Api.http`.
 

@@ -11,7 +11,7 @@ public class CartController(ICartService cartService) : ControllerBase
     // POST: api/cart/session/start
     [HttpPost("session/start")]
     public async Task<ActionResult<CartSessionResponseDto>> StartSession(
-        [FromBody] StartSessionRequest request,
+        [FromBody] LegacyStartSessionRequest request,
         CancellationToken cancellationToken)
     {
         var session = await cartService.StartSessionAsync(request, cancellationToken);

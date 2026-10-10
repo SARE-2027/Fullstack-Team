@@ -11,7 +11,7 @@
 | `/api/v1/admin/...` | `admin` | إدارة الكتالوج بالكامل |
 | `/api/v1/dashboard/...` | `staff` و`admin` | العدادات التشغيلية |
 
-السياسات المركزية هي `CatalogRead` و`CatalogManage`؛ يمكن توسيعها عند إضافة أدوار جديدة. فحص JWT موجود، وإصدار التوكن وتسجيل الدخول لهما فيتشر مستقلة. إعداد توكنات التطوير موضح في [التصنيفات](catalog-categories.md).
+السياسات المركزية هي `CatalogRead` و`CatalogManage`؛ يمكن توسيعها عند إضافة أدوار جديدة. بعد الدمج، تسجيل الدخول وإصدار التوكن موجودان تحت `/api/auth`، وأدوار Identity هي `Customer/Staff/Admin`؛ سياسات الكتالوج تقبل أيضًا الصيغة الصغيرة السابقة. خطوات تسجيل الدخول موضحة في [التصنيفات](catalog-categories.md).
 
 ## التصنيفات
 
@@ -96,7 +96,7 @@ dotnet run --project backend/SARE.Api
 dotnet test backend/SARE.sln
 ```
 
-اضبط `ConnectionStrings:Database` باستخدام User Secrets أو `ConnectionStrings__Database` للاتصال بقاعدة PostgreSQL. اضبط إعدادات JWT المناسبة للجهة التي تصدر التوكنات. اضبط `ProductImages__StoragePath` على مجلد دائم قابل للكتابة؛ احفظه مع نسخة قاعدة البيانات الاحتياطية. كل feature لها commit مستقل على `codex/catalog-feature`.
+راجع [ملاحظات الدمج وتاريخ migrations](integration-startup.md) قبل تحديث قاعدة موجودة من فرع قديم. اضبط `ConnectionStrings:Database` باستخدام User Secrets أو `ConnectionStrings__Database` للاتصال بقاعدة PostgreSQL. إصدار التوكن والتحقق منه يستخدمان إعدادات `Jwt`. اضبط `ProductImages__StoragePath` على مجلد دائم قابل للكتابة؛ احفظه مع نسخة قاعدة البيانات الاحتياطية. كل feature لها commit مستقل على `codex/catalog-feature`، والدمج موجود على `codex/integration-startup`.
 
 طلبات جاهزة في [SARE.Api.http](../SARE.Api/SARE.Api.http). استبدل IDs والتوكنات الموجودة في أول الملف بالنتائج الفعلية. الطلبات أمثلة مستقلة؛ لتجربة الرحلة كاملة، أنشئ التصنيف ثم المنتج ثم الخيار والقيمة ثم الفاريانت، واترك المنتج والفاريانت مفعلين أثناء تجربة القراءة العامة.
 

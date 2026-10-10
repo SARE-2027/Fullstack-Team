@@ -11,73 +11,16 @@ namespace SARE.Infrastructure.Services;
 public class CartService(
     AppDbContext context,
     ICartNotificationService notifications,
-    ILogger<CartService> logger) : ICartService
+    ILogger<CartService> logger,
+    ISessionService sessionService) : ICartService
 {
     private const int DefaultWeightToleranceGrams = 15;
 
-    public async Task<CartSessionResponseDto> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken = default)
+    public async Task<CartSessionResponseDto> StartSessionAsync(LegacyStartSessionRequest request, CancellationToken cancellationToken = default)
     {
-        // 1. Mark existing open sessions on this cart as abandoned
-        var openSessions = await context.Sessions
-            .Where(s => s.CartId == request.CartId && s.Status == SessionStatus.Open)
-            .ToListAsync(cancellationToken);
-
-        foreach (var oldSession in openSessions)
-        {
-            oldSession.Status = SessionStatus.Abandoned;
-            oldSession.CloseReason = CloseReason.Abandoned;
-            oldSession.ClosedAt = DateTime.UtcNow;
-        }
-
-        // 2. Ensure cart exists or register it
-        var cart = await context.Carts.FindAsync([request.CartId], cancellationToken);
-        if (cart == null)
-        {
-            cart = new SARE.Domain.Cart.Cart
-            {
-                Id = request.CartId,
-                Status = CartStatus.Active,
-                BatteryPct = 100,
-                LastSeenAt = DateTime.UtcNow
-            };
-            context.Carts.Add(cart);
-        }
-        else
-        {
-            cart.Status = CartStatus.Active;
-            cart.LastSeenAt = DateTime.UtcNow;
-        }
-
-        // 3. Create new Session
-        var session = new Session
-        {
-            Id = Guid.NewGuid(),
-            CartId = request.CartId,
-            UserId = request.UserId,
-            Status = SessionStatus.Open,
-            TotalMinor = 0,
-            StartedAt = DateTime.UtcNow,
-            LastActivityAt = DateTime.UtcNow
-        };
-
-        context.Sessions.Add(session);
-        await context.SaveChangesAsync(cancellationToken);
-
-        logger.LogInformation("Started cart session {SessionId} on Cart {CartId}", session.Id, request.CartId);
-
-        // Notify Cart screen via SignalR
-        await notifications.NotifySessionStartedAsync(request.CartId, session.Id);
-
-        return new CartSessionResponseDto(
-            session.Id,
-            session.CartId,
-            session.Status,
-            session.TotalMinor,
-            session.StartedAt,
-            []
-        );
+        var session = await sessionService.StartSessionAsync(new StartSessionRequest(request.CartId, UserId: request.UserId), cancellationToken);
+        return (await GetSessionByIdAsync(session.SessionId, cancellationToken))!;
     }
-
     public async Task<CartItemProcessResult> ProcessItemDetectionAsync(Guid sessionId, CartAddItemRequest request, CancellationToken cancellationToken = default)
     {
         var session = await context.Sessions
@@ -97,7 +40,9 @@ public class CartService(
         }
 
         var product = await context.Products
-            .FirstOrDefaultAsync(p => p.Id == variant.ProductId, cancellationToken);
+            .FirstOrDefaultAsync(p => p.Id == variant.ProductId && p.IsActive, cancellationToken);
+
+        if (product is null) return new CartItemProcessResult(false, "Product is not available.");
 
         string productName = product?.NameEn ?? "Unknown Product";
 
@@ -195,44 +140,12 @@ public class CartService(
 
     public async Task<CheckoutResponseDto> CheckoutSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        var session = await context.Sessions
-            .FirstOrDefaultAsync(s => s.Id == sessionId && s.Status == SessionStatus.Open, cancellationToken);
-
-        if (session == null)
-        {
-            throw new InvalidOperationException("Active session not found or already closed.");
-        }
-
-        session.Status = SessionStatus.Closed;
-        session.ClosedAt = DateTime.UtcNow;
-
-        var cart = await context.Carts.FindAsync([session.CartId], cancellationToken);
-        if (cart != null)
-        {
-            cart.Status = CartStatus.Active;
-            cart.LastSeenAt = DateTime.UtcNow;
-        }
-
-        await context.SaveChangesAsync(cancellationToken);
-
-        string receiptHash = $"RECEIPT_{session.Id}_{DateTime.UtcNow.Ticks}";
-
-        await notifications.NotifyCheckoutSuccessAsync(
-            session.CartId,
-            session.Id,
-            session.TotalMinor,
-            receiptHash
-        );
-
-        return new CheckoutResponseDto(
-            session.Id,
-            session.CartId,
-            session.TotalMinor,
-            receiptHash,
-            session.ClosedAt.Value
-        );
+        var summary = await sessionService.CloseSessionAsync(sessionId, ct: cancellationToken);
+        var session = await context.Sessions.SingleAsync(item => item.Id == sessionId, cancellationToken);
+        var receiptHash = $"RECEIPT_{session.Id}_{session.ClosedAt!.Value.Ticks}";
+        await notifications.NotifyCheckoutSuccessAsync(session.CartId, session.Id, summary.TotalMinor, receiptHash);
+        return new CheckoutResponseDto(session.Id, session.CartId, summary.TotalMinor, receiptHash, session.ClosedAt.Value);
     }
-
     public async Task<CartSessionResponseDto?> GetActiveSessionByCartIdAsync(string cartId, CancellationToken cancellationToken = default)
     {
         var session = await context.Sessions
@@ -275,7 +188,7 @@ public class CartService(
         {
             var variant = variants.GetValueOrDefault(i.VariantId);
             string name = variant != null && products.TryGetValue(variant.ProductId, out var n) ? n : "Unknown Item";
-            return new SessionItemDto(
+            return new LegacySessionItemDto(
                 i.Id,
                 i.VariantId,
                 name,

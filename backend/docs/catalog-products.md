@@ -1,6 +1,6 @@
 # Products API
 
-This feature adds product management, customer browsing, staff inspection, and product dashboard statistics on the `codex/catalog-feature` branch. The current domain roles are `customer`, `staff`, and `admin`.
+This feature adds product management, customer browsing, staff inspection, and product dashboard statistics. The integrated Identity roles are `Customer`, `Staff`, and `Admin`; catalog policies also accept the existing lowercase development roles. See [integration notes](integration-startup.md).
 
 ## Permissions and endpoints
 

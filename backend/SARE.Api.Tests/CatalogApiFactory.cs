@@ -29,6 +29,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     public bool SimulateDeleteRace { get; set; }
     public bool SimulateProductCategoryRace { get; set; }
     public bool SimulateCatalogWriteRace { get; set; }
+    public bool SimulateSessionWriteRace { get; set; }
     public bool UseApplicationJwt { get; init; }
     public string ImageRoot { get; } = Path.Combine(Path.GetTempPath(), "sare-image-tests", Guid.NewGuid().ToString("N"));
 
@@ -48,6 +49,8 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
             services.AddDbContext<AppDbContext>(options => options.UseSqlite(_connection)
                 .AddInterceptors(new DeleteRaceInterceptor(this)));
+            services.AddScoped<AppDbContext>(provider => new SqliteCatalogDbContext(
+                provider.GetRequiredService<DbContextOptions<AppDbContext>>()));
             services.RemoveAll<IProductImageStore>();
             services.AddSingleton<IProductImageStore>(provider => new LocalProductImageStore(
                 ImageRoot, provider.GetRequiredService<ILogger<LocalProductImageStore>>()));
@@ -106,6 +109,14 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
                 await eventData.Context.Database.ExecuteSqlInterpolatedAsync(
                     $"UPDATE products SET updated_at = {DateTime.UtcNow.AddMinutes(1)}, name_en = {"Concurrent edit"} WHERE id = {changedProduct.Entity.Id}", cancellationToken);
             }
+            var changedSession = eventData.Context.ChangeTracker.Entries<SARE.Domain.Cart.Session>()
+                .FirstOrDefault(entry => entry.State == EntityState.Modified);
+            if (factory.SimulateSessionWriteRace && changedSession is not null)
+            {
+                factory.SimulateSessionWriteRace = false;
+                await eventData.Context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE sessions SET last_activity_at = {DateTime.UtcNow.AddMinutes(1)} WHERE id = {changedSession.Entity.Id}", cancellationToken);
+            }
             if ((factory.SimulateDeleteRace && eventData.Context!.ChangeTracker.Entries<Category>()
                     .Any(entry => entry.State == EntityState.Deleted))
                 || (factory.SimulateProductCategoryRace && eventData.Context!.ChangeTracker.Entries<Product>()
@@ -118,6 +129,19 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
             }
 
             return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
+
+    private sealed class SqliteCatalogDbContext(DbContextOptions<AppDbContext> options) : AppDbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+            // SQLite has no PostgreSQL xmin; use timestamps to exercise stale-write behavior in these tests.
+            modelBuilder.Entity<SARE.Domain.Cart.Cart>().Ignore("Version");
+            modelBuilder.Entity<SARE.Domain.Cart.Cart>().Property(cart => cart.LastSeenAt).IsConcurrencyToken();
+            modelBuilder.Entity<SARE.Domain.Cart.Session>().Ignore("Version");
+            modelBuilder.Entity<SARE.Domain.Cart.Session>().Property(session => session.LastActivityAt).IsConcurrencyToken();
         }
     }
 }

@@ -1,31 +1,40 @@
 using Microsoft.AspNetCore.SignalR;
+using SARE.Application.Common.Interfaces;
+using SARE.Application.Common.Security;
+using Microsoft.AspNetCore.Authorization;
+using SARE.Api.Authorization;
 
 namespace SARE.Api.Hubs;
 
-public class CartHub : Hub
+public class CartHub(ICartRepository carts) : Hub
 {
-    private readonly ILogger<CartHub> _logger;
-
-    public CartHub(ILogger<CartHub> logger)
+    public async Task JoinCartGroup(string cartId, string? hardwareToken = null)
     {
-        _logger = logger;
-    }
+        var cart = await carts.GetByIdAsync(cartId);
+        if (cart is null)
+        {
+            throw new HubException($"العربة {cartId} غير مسجلة في النظام");
+        }
 
-    /// <summary>
-    /// Join group for a specific cart to receive live session and item updates
-    /// </summary>
-    public async Task JoinCartGroup(string cartId)
-    {
+        // إذا كانت العربة تمتلك رمز تحقق، نتحقق من صحة الرمز قبل السماح بالاستماع لبياناتها
+        if (!string.IsNullOrWhiteSpace(cart.TokenHash))
+        {
+            if (string.IsNullOrWhiteSpace(hardwareToken) || !TokenHasher.VerifyToken(hardwareToken, cart.TokenHash))
+            {
+                throw new HubException("رمز مصادقة العربة غير صالح للاتصال بالقناة");
+            }
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"cart_{cartId}");
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Cart_{cartId}");
-        _logger.LogInformation("Connection {ConnectionId} joined Cart_{CartId}", Context.ConnectionId, cartId);
     }
 
-    /// <summary>
-    /// Join group for the store manager / cashier dashboard for fraud and status logs
-    /// </summary>
-    public async Task JoinDashboardGroup()
+    public async Task LeaveCartGroup(string cartId)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, "StoreDashboard");
-        _logger.LogInformation("Connection {ConnectionId} joined StoreDashboard", Context.ConnectionId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"cart_{cartId}");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"Cart_{cartId}");
     }
+
+    [Authorize(Policy = AuthorizationPolicies.CatalogRead)]
+    public Task JoinDashboardGroup() => Groups.AddToGroupAsync(Context.ConnectionId, "StoreDashboard");
 }

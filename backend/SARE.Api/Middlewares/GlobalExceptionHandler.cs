@@ -4,6 +4,8 @@ using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using SARE.Application.Common.Exceptions;
+using Microsoft.EntityFrameworkCore;
+using ValidationException = FluentValidation.ValidationException;
 
 namespace SARE.Api.Middlewares;
 
@@ -30,13 +32,13 @@ public sealed class GlobalExceptionHandler(
             {
                 Status = badRequest.StatusCode, Title = "Invalid request.", Detail = badRequest.Message
             },
-            NotFoundException => new ProblemDetails
+            AppException application => new ProblemDetails
             {
-                Status = StatusCodes.Status404NotFound, Title = "Resource not found.", Detail = exception.Message
+                Status = application.StatusCode, Title = application.Title, Detail = application.Message
             },
-            ConflictException => new ProblemDetails
+            DbUpdateConcurrencyException => new ProblemDetails
             {
-                Status = StatusCodes.Status409Conflict, Title = "Operation conflicts with existing data.", Detail = exception.Message
+                Status = StatusCodes.Status409Conflict, Title = "Concurrent change.", Detail = "Data changed. Reload it and try again."
             },
             _ => new ProblemDetails
             {
@@ -48,6 +50,12 @@ public sealed class GlobalExceptionHandler(
             logger.LogError(exception, "Unhandled exception while processing {RequestPath}.", httpContext.Request.Path);
 
         problem.Instance = httpContext.Request.Path;
+        if (exception is AppException appException)
+        {
+            if (appException.ErrorCode is not null) problem.Extensions["errorCode"] = appException.ErrorCode;
+            if (appException.Errors is not null) problem.Extensions["errors"] = appException.Errors
+                .ToDictionary(pair => JsonNamingPolicy.CamelCase.ConvertName(pair.Key), pair => pair.Value);
+        }
         problem.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
         httpContext.Response.StatusCode = problem.Status!.Value;
         await problemDetailsService.WriteAsync(new ProblemDetailsContext

@@ -1,6 +1,6 @@
 # SARE — Smart Automated Retail Ecosystem
 
-> **حالة المشروع:** أُنشئت الـ solution والمشاريع الأربعة داخل `backend/` باستخدام .NET 10. كُتبت كيانات وEnums طبقة Domain، وأُضيف `AppDbContext` وتهيئة الجداول والعلاقات في Infrastructure. الخدمات والـ API وباقي المكونات ما زالت ضمن التصميم المستهدف. لم تُنشأ migration أو قاعدة بيانات.
+> **حالة المشروع:** فرع `codex/integration-startup` يجمع الكتالوج، المصادقة بـ Identity/JWT، خدمات العربة والجلسات وSignalR، وشغل كشك Flutter الموجود على main. الـ backend يستخدم .NET 10 وPostgreSQL، وتوجد migrations. تفاصيل الدمج والتحقق وترقية قواعد الفروع القديمة في [ملاحظات الدمج](backend/docs/integration-startup.md).
 
 ## نظرة عامة
 

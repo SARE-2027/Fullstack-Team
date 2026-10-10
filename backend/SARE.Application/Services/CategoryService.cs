@@ -1,4 +1,5 @@
 using FluentValidation;
+using ValidationException = FluentValidation.ValidationException;
 using SARE.Application.Common.DTOs;
 using SARE.Application.Common.Exceptions;
 using SARE.Application.Common.Interfaces;

@@ -2,7 +2,7 @@ using SARE.Domain.Enums;
 
 namespace SARE.Application.DTOs.Cart;
 
-public record StartSessionRequest(
+public record LegacyStartSessionRequest(
     string CartId,
     Guid? UserId
 );
@@ -13,7 +13,7 @@ public record CartAddItemRequest(
     DetectionSource Source = DetectionSource.Scanner
 );
 
-public record SessionItemDto(
+public record LegacySessionItemDto(
     Guid Id,
     Guid VariantId,
     string ProductName,
@@ -30,7 +30,7 @@ public record CartSessionResponseDto(
     SessionStatus Status,
     int TotalMinor,
     DateTime StartedAt,
-    List<SessionItemDto> Items
+    List<LegacySessionItemDto> Items
 );
 
 public record CartItemProcessResult(

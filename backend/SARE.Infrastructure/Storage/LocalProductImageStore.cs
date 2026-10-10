@@ -1,5 +1,6 @@
 using System.Buffers;
 using FluentValidation;
+using ValidationException = FluentValidation.ValidationException;
 using FluentValidation.Results;
 using Microsoft.Extensions.Logging;
 using SARE.Application.Common.Exceptions;
