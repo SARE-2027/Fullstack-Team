@@ -183,6 +183,12 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("token_hash");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_carts");
 
@@ -247,11 +253,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("weight_delta_g");
 
-                    b.Property<string>("Zone")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("zone");
-
                     b.HasKey("Id")
                         .HasName("pk_detection_events");
 
@@ -268,8 +269,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_detection_events_outcome", "outcome IN ('accepted', 'corrected', 'rejected', 'unknown')");
 
                             t.HasCheckConstraint("ck_detection_events_source", "source IN ('vision', 'scanner', 'manual')");
-
-                            t.HasCheckConstraint("ck_detection_events_zone", "zone IN ('basket', 'tray')");
                         });
                 });
 
@@ -322,6 +321,12 @@ namespace SARE.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id")
                         .HasName("pk_sessions");
@@ -383,11 +388,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("variant_id");
 
-                    b.Property<string>("Zone")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("zone");
-
                     b.HasKey("Id")
                         .HasName("pk_session_items");
 
@@ -404,8 +404,6 @@ namespace SARE.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_session_items_source", "source IN ('vision', 'scanner', 'manual')");
 
                             t.HasCheckConstraint("ck_session_items_unit_price_minor", "unit_price_minor >= 0");
-
-                            t.HasCheckConstraint("ck_session_items_zone", "zone IN ('basket', 'tray')");
                         });
                 });
 
@@ -520,6 +518,7 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnName("name_en");
 
                     b.Property<DateTime>("UpdatedAt")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at")

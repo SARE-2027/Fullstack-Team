@@ -1,0 +1,320 @@
+using FluentValidation;
+using SARE.Application.Common.Exceptions;
+using ValidationException = SARE.Application.Common.Exceptions.ValidationException;
+using SARE.Application.Common.Interfaces;
+using SARE.Application.Common.Security;
+using SARE.Application.DTOs.Cart;
+using SARE.Domain.Cart;
+using SARE.Domain.Enums;
+using SARE.Domain.Users;
+
+namespace SARE.Application.Services;
+
+public class SessionService(
+    ICartRepository carts,
+    ISessionRepository sessions,
+    IUserRepository users,
+    ICartNotificationService cartNotifications,
+    IUnitOfWork uow,
+    IValidator<StartSessionRequest>? startValidator = null,
+    IValidator<CloseSessionRequest>? closeValidator = null,
+    IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null) : ISessionService
+{
+    public async Task<CartTelemetryResponse> UpdateCartTelemetryAsync(
+        string cartId,
+        UpdateCartTelemetryRequest request,
+        string? hardwareToken = null,
+        CancellationToken ct = default)
+    {
+        if (telemetryValidator is not null)
+        {
+            var valResult = await telemetryValidator.ValidateAsync(request, ct);
+            if (!valResult.IsValid)
+                throw new ValidationException(valResult.Errors);
+        }
+
+        var cart = await carts.GetByIdAsync(cartId, ct)
+            ?? throw new NotFoundException("Cart", cartId);
+
+        // التحقق من رمز مصادقة هاردوير العربة
+        if (!string.IsNullOrWhiteSpace(cart.TokenHash))
+        {
+            if (string.IsNullOrWhiteSpace(hardwareToken) || !TokenHasher.VerifyToken(hardwareToken, cart.TokenHash))
+            {
+                throw new UnauthorizedException("رمز مصادقة العربة (X-Cart-Token) غير صالح أو مفقود", "INVALID_CART_TOKEN");
+            }
+        }
+
+        if (request.BatteryPct is not null)
+            cart.BatteryPct = request.BatteryPct;
+
+        if (request.SwVersion is not null)
+            cart.SwVersion = request.SwVersion;
+
+        // 3. فحص ما إذا كانت هناك جلسة تسوق نشطة على العربة حالياً
+        var activeSession = await sessions.GetActiveByCartIdAsync(cartId, ct);
+
+        // 1. تحديث الحالة إذا تم تمريرها صراحة
+        if (request.Status is not null)
+        {
+            cart.Status = request.Status.Value;
+        }
+        // 2. حماية تلقائية: إذا كانت البطارية حرجة (<= 10) ولم تُحدد الحالة صراحة:
+        // إذا كان هناك متسوق يستخدمها حالياً، لا تُعطل العربة ويكمل تسوقه دون انقطاع.
+        // تُعطل فقط في حالة عدم وجود جلسة نشطة لمنع أي متسوق جديد من أخذها.
+        else if (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
+        {
+            if (activeSession is null)
+            {
+                cart.Status = CartStatus.Disabled;
+            }
+        }
+
+        var now = DateTime.UtcNow;
+        cart.LastSeenAt = now;
+
+        await carts.UpdateAsync(cart, ct);
+
+        // إشعار شاشة العربة في حالة انخفاض البطارية للوضع الحرج
+        if (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
+        {
+            await cartNotifications.NotifyLowBatteryAsync(cart.Id, cart.BatteryPct.Value, ct);
+        }
+
+        int intervalSeconds;
+        if (cart.Status == CartStatus.Disabled || (cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 15))
+        {
+            intervalSeconds = 60; // وضع حرج أو معطلة: فحص كل دقيقة لمتابعة الشحن
+        }
+        else if (activeSession is not null)
+        {
+            intervalSeconds = 120; // جلسة تسوق نشطة: فحص كل دقيقتين
+        }
+        else
+        {
+            intervalSeconds = 300; // وضع الاستعداد السليم: فحص كل 5 دقائق
+        }
+
+        return new CartTelemetryResponse(
+            CartId: cart.Id,
+            Status: cart.Status.ToString().ToLowerInvariant(),
+            BatteryPct: cart.BatteryPct,
+            NextReportIntervalSeconds: intervalSeconds,
+            AcknowledgedAt: now
+        );
+    }
+
+    public async Task<CartSummaryResponse> StartSessionAsync(
+        StartSessionRequest request,
+        CancellationToken ct = default)
+    {
+        if (startValidator is not null)
+        {
+            var valResult = await startValidator.ValidateAsync(request, ct);
+            if (!valResult.IsValid)
+                throw new ValidationException(valResult.Errors);
+        }
+
+        // 1. فحص وجود السلة وحالتها
+        var cart = await carts.GetByIdAsync(request.CartId, ct)
+            ?? throw new NotFoundException("Cart", request.CartId);
+
+        if (cart.Status == CartStatus.Disabled)
+            throw new BusinessRuleException($"العربة {request.CartId} معطلة حالياً");
+
+        // 2. التأكد من عدم وجود جلسة نشطة على هذه السلة
+        var activeSession = await sessions.GetActiveByCartIdAsync(request.CartId, ct);
+        if (activeSession is not null)
+            throw new ConflictException($"العربة {request.CartId} لديها جلسة نشطة بالفعل");
+
+        // 3. فحص كارت الـ NFC (إن وُجد) والوصول للمستخدم
+        User? user = null;
+        if (request.UserId.HasValue)
+            user = await users.GetByIdAsync(request.UserId.Value, ct)
+                ?? throw new NotFoundException("User", request.UserId.Value);
+        if (!string.IsNullOrWhiteSpace(request.NfcUid))
+        {
+            user = await users.GetByNfcUidAsync(request.NfcUid, ct)
+                ?? throw new NotFoundException($"كارت الـ NFC ({request.NfcUid}) غير مسجل لأي مستخدم");
+
+        }
+        if (user is { IsActive: false }) throw new BusinessRuleException("حساب المستخدم معطل");
+
+        // 4. إنشاء الجلسة الجديدة
+        var now = DateTime.UtcNow;
+        var session = new Session
+        {
+            Id = Guid.NewGuid(),
+            CartId = cart.Id,
+            UserId = user?.Id,
+            Status = SessionStatus.Open,
+            TotalMinor = 0,
+            StartedAt = now,
+            LastActivityAt = now
+        };
+
+        // إضافة الجلسة كعملية ذرية نقية (تحديث LastSeenAt يخص فقط إشارات الـ Telemetry الحقيقية من العربة)
+        await sessions.AddAsync(session, ct);
+
+        // 5. إرجاع ملخص الجلسة وإشعار شاشة العربة
+        var summary = new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: user?.Id,
+            UserName: user?.Name,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: 0,
+            StartedAt: session.StartedAt,
+            Items: []
+        );
+
+        await cartNotifications.NotifySessionStartedAsync(cart.Id, summary, ct);
+
+        return summary;
+    }
+
+    public async Task<CartSummaryResponse> GetSessionSummaryAsync(
+        Guid sessionId,
+        CancellationToken ct = default)
+    {
+        var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
+        if (session is null)
+            throw new NotFoundException("Session", sessionId);
+
+        string? userName = null;
+        if (session.UserId.HasValue)
+        {
+            var user = await users.GetByIdAsync(session.UserId.Value, ct);
+            userName = user?.Name;
+        }
+
+        return new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: session.UserId,
+            UserName: userName,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: items.Count,
+            StartedAt: session.StartedAt,
+            Items: items
+        );
+    }
+
+    public async Task<CartSummaryResponse> GetActiveSessionByCartIdAsync(
+        string cartId,
+        CancellationToken ct = default)
+    {
+        var cart = await carts.GetByIdAsync(cartId, ct)
+            ?? throw new NotFoundException("Cart", cartId);
+
+        var (session, items) = await sessions.GetActiveWithItemsByCartIdAsync(cartId, ct);
+        if (session is null)
+            throw new NotFoundException($"لا توجد جلسة نشطة للعربة {cartId} حالياً");
+
+        string? userName = null;
+        if (session.UserId.HasValue)
+        {
+            var user = await users.GetByIdAsync(session.UserId.Value, ct);
+            userName = user?.Name;
+        }
+
+        return new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: session.UserId,
+            UserName: userName,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: items.Count,
+            StartedAt: session.StartedAt,
+            Items: items
+        );
+    }
+
+    public async Task<CartSummaryResponse> CloseSessionAsync(
+        Guid sessionId,
+        CloseSessionRequest? request = null,
+        CancellationToken ct = default)
+    {
+        if (request is not null && closeValidator is not null)
+        {
+            var valResult = await closeValidator.ValidateAsync(request, ct);
+            if (!valResult.IsValid)
+                throw new ValidationException(valResult.Errors);
+        }
+
+        // 1. جلب الجلسة مع أصنافها
+        var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
+        if (session is null)
+            throw new NotFoundException("Session", sessionId);
+
+        // 2. التحقق من أن الجلسة ما زالت مفتوحة
+        if (session.Status != SessionStatus.Open)
+            throw new ConflictException($"الجلسة {sessionId} مغلقة بالفعل بحالة ({session.Status})");
+
+        // 3. التحقق من وجود الموظف المغلق (إن وجد)
+        if (request?.ClosedByUserId.HasValue == true)
+        {
+            var closer = await users.GetByIdAsync(request.ClosedByUserId.Value, ct);
+            if (closer is null)
+                throw new NotFoundException("User", request.ClosedByUserId.Value);
+        }
+
+        // 4. تحديث حالة الجلسة ووقت الإغلاق
+        var now = DateTime.UtcNow;
+        session.Status = request?.Reason == CloseReason.Abandoned
+            ? SessionStatus.Abandoned
+            : SessionStatus.Closed;
+
+        session.ClosedAt = now;
+        session.LastActivityAt = now;
+        session.ClosedBy = request?.ClosedByUserId;
+        session.CloseReason = request?.Reason ?? (request?.ClosedByUserId.HasValue == true ? CloseReason.StaffClosed : null);
+
+        // إعادة احتساب إجمالي الفاتورة المالي الفعلي من واقع أصناف السلة النشطة لضمان النزاهة المالية
+        session.TotalMinor = items.Sum(i => i.UnitPriceMinor);
+
+        // بعد انتهاء جلسة المتسوق بنجاح: إذا كانت البطارية منخفضة جداً، تُعطل العربة الآن لمنع أي متسوق تالٍ من أخذها
+        var cart = await carts.GetByIdAsync(session.CartId, ct);
+        if (cart is not null && cart.BatteryPct.HasValue && cart.BatteryPct.Value <= 10)
+        {
+            cart.Status = CartStatus.Disabled;
+        }
+
+        await uow.ExecuteTransactionAsync(async () =>
+        {
+            await sessions.UpdateAsync(session, ct);
+            if (cart is not null)
+            {
+                await carts.UpdateAsync(cart, ct);
+            }
+        }, ct);
+
+        // 5. جلب اسم المتسوق للعرض في الفاتورة
+        string? userName = null;
+        if (session.UserId.HasValue)
+        {
+            var user = await users.GetByIdAsync(session.UserId.Value, ct);
+            userName = user?.Name;
+        }
+
+        // 6. إرجاع ملخص الفاتورة المغلقة وإشعار شاشة العربة
+        var summary = new CartSummaryResponse(
+            SessionId: session.Id,
+            CartId: session.CartId,
+            UserId: session.UserId,
+            UserName: userName,
+            Status: session.Status.ToString().ToLowerInvariant(),
+            TotalMinor: session.TotalMinor,
+            ItemsCount: items.Count,
+            StartedAt: session.StartedAt,
+            Items: items
+        );
+
+        await cartNotifications.NotifySessionClosedAsync(session.CartId, summary, ct);
+
+        return summary;
+    }
+}

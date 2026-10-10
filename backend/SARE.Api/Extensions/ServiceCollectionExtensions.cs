@@ -5,6 +5,9 @@ using Microsoft.OpenApi;
 using SARE.Api.Services;
 using SARE.Application.Common.Interfaces;
 using SARE.Infrastructure.Authentication;
+using SARE.Api.Authorization;
+using SARE.Api.Middlewares;
+using SARE.Domain.Users;
 
 namespace SARE.Api.Extensions;
 
@@ -14,9 +17,11 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
-        services.AddScoped<ICartNotificationService, SignalRCartNotificationService>();
+        services.AddScoped<ICartNotificationService, CartNotificationService>();
 
         services.AddControllers();
+        services.AddProblemDetails();
+        services.AddExceptionHandler<GlobalExceptionHandler>();
         services.AddSignalR();
 
         services.AddCors(options =>
@@ -50,6 +55,16 @@ public static class ServiceCollectionExtensions
         {
             options.RequireHttpsMetadata = false;
             options.SaveToken = true;
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/hubs/cart") &&
+                        context.Request.Query.TryGetValue("access_token", out var token))
+                        context.Token = token;
+                    return Task.CompletedTask;
+                }
+            };
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = !string.IsNullOrWhiteSpace(jwtSection["Issuer"]),
@@ -63,7 +78,10 @@ public static class ServiceCollectionExtensions
             };
         });
 
-        services.AddAuthorization();
+        services.AddAuthorizationBuilder()
+            .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, "admin"))
+            .AddPolicy(AuthorizationPolicies.CatalogRead, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, UserRoles.Staff, "admin", "staff"))
+            .AddPolicy(AuthorizationPolicies.CatalogManage, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, "admin"));
 
         return services;
     }

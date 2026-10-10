@@ -11,7 +11,7 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(product => product.NameAr).HasMaxLength(150);
         builder.Property(product => product.NameEn).HasMaxLength(150);
         builder.Property(product => product.ImageUrl).HasMaxLength(500);
-        builder.Property(product => product.UpdatedAt).HasDefaultValueSql("now()");
+        builder.Property(product => product.UpdatedAt).HasDefaultValueSql("now()").IsConcurrencyToken();
 
         builder.HasOne<Category>()
             .WithMany()

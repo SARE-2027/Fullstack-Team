@@ -1,46 +1,22 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using SARE.Application.Common.Interfaces;
+using SARE.Application.Common.DTOs;
 using SARE.Application.DTOs.Catalog;
+using SARE.Application.Services;
 
 namespace SARE.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
-public class ProductsController(IProductService productService) : ControllerBase
+[Route("api/v1/products")]
+[AllowAnonymous]
+public sealed class ProductsController(ProductService service) : ControllerBase
 {
-    // GET: api/products
     [HttpGet]
-    public async Task<ActionResult<List<ProductResponseDto>>> GetProducts(CancellationToken cancellationToken)
-    {
-        var products = await productService.GetAllProductsAsync(cancellationToken);
-        return Ok(products);
-    }
+    public async Task<ActionResult<PagedResponse<ProductSummaryResponse>>> GetPage(
+        [FromQuery] ProductQuery query, CancellationToken cancellationToken) =>
+        Ok(await service.GetPublicPageAsync(query, cancellationToken));
 
-    // GET: api/products/{id}
-    [HttpGet("{id:guid}")]
-    public async Task<ActionResult<ProductResponseDto>> GetProduct(Guid id, CancellationToken cancellationToken)
-    {
-        var product = await productService.GetProductByIdAsync(id, cancellationToken);
-        if (product == null) return NotFound(new { message = "Product not found" });
-
-        return Ok(product);
-    }
-
-    // GET: api/products/by-barcode/{barcode}
-    [HttpGet("by-barcode/{barcode}")]
-    public async Task<ActionResult<ProductResponseDto>> GetByBarcode(string barcode, CancellationToken cancellationToken)
-    {
-        var product = await productService.GetProductByBarcodeAsync(barcode, cancellationToken);
-        if (product == null) return NotFound(new { message = $"No product found with barcode '{barcode}'" });
-
-        return Ok(product);
-    }
-
-    // POST: api/products
-    [HttpPost]
-    public async Task<ActionResult<ProductResponseDto>> CreateProduct([FromBody] CreateProductRequest request, CancellationToken cancellationToken)
-    {
-        var created = await productService.CreateProductAsync(request, cancellationToken);
-        return CreatedAtAction(nameof(GetProduct), new { id = created.Id }, created);
-    }
+    [HttpGet("{productId:guid}")]
+    public async Task<ActionResult<ProductPublicDetailResponse>> GetById(Guid productId, CancellationToken cancellationToken) =>
+        Ok(await service.GetPublicByIdAsync(productId, cancellationToken));
 }

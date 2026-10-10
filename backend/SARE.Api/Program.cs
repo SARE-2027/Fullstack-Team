@@ -14,3 +14,5 @@ app.UseApiPipeline();
 await app.SeedDatabaseAsync();
 
 app.Run();
+
+public partial class Program { }

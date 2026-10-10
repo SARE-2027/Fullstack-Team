@@ -46,5 +46,7 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.HasIndex(session => session.CartId);
         builder.HasIndex(session => session.UserId);
         builder.HasIndex(session => session.Status);
+
+        builder.Property<uint>("Version").IsRowVersion();
     }
 }

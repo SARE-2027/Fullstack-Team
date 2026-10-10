@@ -3,9 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SARE.Application.Common.Interfaces;
+using SARE.Infrastructure.Persistence;
+using SARE.Infrastructure.Persistence.Repositories;
+using SARE.Infrastructure.Storage;
+using Microsoft.Extensions.Logging;
 using SARE.Domain.Users;
 using SARE.Infrastructure.Authentication;
-using SARE.Infrastructure.Persistence;
 using SARE.Infrastructure.Services;
 
 namespace SARE.Infrastructure.Extensions;
@@ -38,9 +41,21 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<ICartService, CartService>();
+        services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<ISessionRepository, SessionRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<DbInitializer>();
 
         services.AddSingleton(TimeProvider.System);
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IProductOptionRepository, ProductOptionRepository>();
+        services.AddScoped<IProductVariantRepository, ProductVariantRepository>();
+        services.AddScoped<ICatalogDashboardRepository, CatalogDashboardRepository>();
+        services.AddSingleton<IProductImageStore>(provider => new LocalProductImageStore(
+            configuration["ProductImages:StoragePath"] ?? Path.Combine(AppContext.BaseDirectory, "App_Data", "product-images"),
+            provider.GetRequiredService<ILogger<LocalProductImageStore>>()));
 
         return services;
     }

@@ -7,6 +7,8 @@ public static class ApplicationBuilderExtensions
 {
     public static WebApplication UseApiPipeline(this WebApplication app)
     {
+        app.UseExceptionHandler();
+        app.UseStatusCodePages();
         if (app.Environment.IsDevelopment())
         {
             app.UseSwagger();
@@ -28,6 +30,7 @@ public static class ApplicationBuilderExtensions
 
     public static async Task SeedDatabaseAsync(this WebApplication app)
     {
+        if (!(app.Configuration.GetValue<bool?>("Database:SeedOnStartup") ?? app.Environment.IsDevelopment())) return;
         using var scope = app.Services.CreateScope();
         try
         {

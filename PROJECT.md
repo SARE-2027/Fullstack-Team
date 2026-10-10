@@ -1,6 +1,6 @@
 # SARE — Smart Automated Retail Ecosystem
 
-> **حالة المشروع:** أُنشئت الـ solution والمشاريع الأربعة داخل `backend/` باستخدام .NET 10. كُتبت كيانات وEnums طبقة Domain، وأُضيف `AppDbContext` وتهيئة الجداول والعلاقات في Infrastructure. الخدمات والـ API وباقي المكونات ما زالت ضمن التصميم المستهدف. لم تُنشأ migration أو قاعدة بيانات.
+> **حالة المشروع:** فرع `codex/integration-startup` يجمع الكتالوج، المصادقة بـ Identity/JWT، خدمات العربة والجلسات وSignalR، وشغل كشك Flutter الموجود على main. الـ backend يستخدم .NET 10 وPostgreSQL، وتوجد migrations. تفاصيل الدمج والتحقق وترقية قواعد الفروع القديمة في [ملاحظات الدمج](backend/docs/integration-startup.md).
 
 ## نظرة عامة
 
@@ -44,7 +44,6 @@ backend/
 │   │   ├── UserRole.cs
 │   │   ├── DetectionSource.cs
 │   │   ├── DetectionOutcome.cs
-│   │   ├── CartZone.cs
 │   │   └── CloseReason.cs              # StaffClosed, Abandoned
 │   ├── Catalog/
 │   │   ├── Category.cs
@@ -189,8 +188,8 @@ backend/
 | الجدول | الأعمدة والقيود |
 | --- | --- |
 | `sessions` | `id uuid PK`؛ `cart_id text FK → carts.id`؛ `user_id uuid NULL FK → users.id`؛ `status text`؛ `total_minor int`؛ `started_at timestamptz`؛ `last_activity_at timestamptz`؛ `closed_at timestamptz NULL`؛ `closed_by uuid NULL FK → users.id`؛ `close_reason text NULL`. الجلسة هي الفاتورة، وحالاتها هنا: `open`, `closed`, `abandoned`. أسباب الإغلاق: `staff_closed`, `abandoned`. |
-| `session_items` | `id uuid PK` يولده الـ Pi لمنع التكرار؛ `session_id uuid FK → sessions.id`؛ `variant_id uuid FK → product_variants.id`؛ `unit_price_minor int`؛ `source text`؛ `zone text`؛ `added_at timestamptz`؛ `removed_at timestamptz NULL`. |
-| `detection_events` | `id uuid PK` يولده الـ Pi؛ `session_id uuid FK → sessions.id`؛ `session_item_id uuid NULL FK → session_items.id`؛ `source text`؛ `zone text`؛ `detected_barcode varchar(64) NULL`؛ `confidence real NULL`؛ `weight_delta_g int`؛ `outcome text`؛ `final_barcode varchar(64) NULL`؛ `model_version varchar(50) NULL`؛ `created_at timestamptz` وقت حدوث الرصد على الـ Pi. |
+| `session_items` | `id uuid PK` يولده الـ Pi لمنع التكرار؛ `session_id uuid FK → sessions.id`؛ `variant_id uuid FK → product_variants.id`؛ `unit_price_minor int`؛ `source text`؛ `added_at timestamptz`؛ `removed_at timestamptz NULL`. |
+| `detection_events` | `id uuid PK` يولده الـ Pi؛ `session_id uuid FK → sessions.id`؛ `session_item_id uuid NULL FK → session_items.id`؛ `source text`؛ `detected_barcode varchar(64) NULL`؛ `confidence real NULL`؛ `weight_delta_g int`؛ `outcome text`؛ `final_barcode varchar(64) NULL`؛ `model_version varchar(50) NULL`؛ `created_at timestamptz` وقت حدوث الرصد على الـ Pi. |
 | `shelf_events` | `id uuid PK`؛ `shelf_id text`؛ `variant_id uuid FK → product_variants.id`؛ `weight_delta_g int`؛ `is_matched bool`؛ `matched_session_id uuid NULL FK → sessions.id`؛ `created_at timestamptz`. السحب من الرف يمثل بقيمة وزن سالبة. |
 
 ### القيم المشتركة
@@ -199,7 +198,6 @@ backend/
 | --- | --- |
 | `DetectionSource` | `vision`, `scanner`, `manual` |
 | `DetectionOutcome` | `accepted`, `corrected`, `rejected`, `unknown` |
-| `CartZone` | `basket`, `tray` |
 | `SessionStatus` | `open`, `closed`, `abandoned` |
 | `UserRole` | `customer`, `staff`, `admin` |
 | `CloseReason` | `staff_closed`, `abandoned` |
@@ -220,6 +218,8 @@ backend/
 - إعدادات PostgreSQL وMQTT وJWT ستكون في إعدادات الـ Api، مع حفظ الأسرار خارج الملفات الملتزم بها في المستودع عند بدء التنفيذ.
 
 ## قرارات النطاق الحالي
+
+الكتالوج منفذ داخل `backend`: التصنيفات، المنتجات، الخيارات والقيم، الفاريانتس وربطها، البحث بالباركود، صور المنتجات، وعدادات الداشبورد. [دليل API والصلاحيات والتشغيل](backend/docs/catalog-api.md).
 
 - حالة العربة في البيانات `active` أو `disabled`، وتستخدم العربة `token_hash` لهويتها. أدوار `customer` و`staff` و`admin` تخص المستخدمين، وليست حالات للعربة.
 - الجلسة هي الفاتورة: تضم الأصناف والإجمالي وحالة الجلسة.
