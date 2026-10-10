@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,6 +7,9 @@ using SARE.Infrastructure.Persistence;
 using SARE.Infrastructure.Persistence.Repositories;
 using SARE.Infrastructure.Storage;
 using Microsoft.Extensions.Logging;
+using SARE.Domain.Users;
+using SARE.Infrastructure.Authentication;
+using SARE.Infrastructure.Services;
 
 namespace SARE.Infrastructure.Extensions;
 
@@ -17,6 +21,27 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(connectionString));
+
+        services.AddIdentityCore<User>(options =>
+        {
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequiredLength = 6;
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddRoles<Role>()
+        .AddEntityFrameworkStores<AppDbContext>()
+        .AddDefaultTokenProviders();
+
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+
+        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<ICartService, CartService>();
+        services.AddScoped<DbInitializer>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ICategoryRepository, CategoryRepository>();

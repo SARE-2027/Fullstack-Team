@@ -1,0 +1,38 @@
+{
+  "@@locale": "en",
+  "appName": "SARE Smart Kiosk",
+  "welcomeTitle": "Welcome to Smart Shopping",
+  "welcomeSubtitle": "Experience frictionless checkout with SARE AI & Weight-Verification Cart",
+  "startAsGuest": "Start Shopping as Guest",
+  "startAsGuestDescription": "No registration required. Add items, pay, and go.",
+  "orDivider": "OR",
+  "loyaltySignIn": "Member Sign-in",
+  "tapCardOrQr": "Tap your Membership card (NFC) on the cart handle to access your account",
+  "cartTitle": "Shopping Cart",
+  "emptyCartMessage": "Your cart is empty. Scan an item barcode to begin shopping!",
+  "itemAddedSuccess": "Item added and verified successfully",
+  "itemRemoved": "Item removed from cart",
+  "weightVerifying": "Verifying item weight...",
+  "weightMatchSuccess": "Weight verified (+/-15g match)",
+  "weightMismatchWarning": "Weight discrepancy detected! Please re-check the last placed item.",
+  "scanPrompt": "Scan barcode under camera scanner",
+  "totalAmount": "Total Amount",
+  "subtotal": "Subtotal",
+  "tax": "VAT (14%)",
+  "currencySymbol": "EGP",
+  "weightUnitGrams": "g",
+  "weightUnitKg": "kg",
+  "checkoutButton": "Proceed to Checkout",
+  "cancelCheckout": "Back to Cart",
+  "cartNumberLabel": "Cart #{cartNumber}",
+  "@cartNumberLabel": {
+    "placeholders": {
+      "cartNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "switchLanguage": "العربية",
+  "themeLight": "Light",
+  "themeDark": "Dark"
+}

@@ -29,6 +29,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     public bool SimulateDeleteRace { get; set; }
     public bool SimulateProductCategoryRace { get; set; }
     public bool SimulateCatalogWriteRace { get; set; }
+    public bool UseApplicationJwt { get; init; }
     public string ImageRoot { get; } = Path.Combine(Path.GetTempPath(), "sare-image-tests", Guid.NewGuid().ToString("N"));
 
     public CatalogApiFactory()
@@ -53,6 +54,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
             services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
+                if (UseApplicationJwt) return;
                 options.ConfigurationManager = null;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {

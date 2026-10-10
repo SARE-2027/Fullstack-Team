@@ -1,6 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using SARE.Api.Authorization;
-using SARE.Api.Middlewares;
+using SARE.Api.Extensions;
 using SARE.Application.Extensions;
 using SARE.Infrastructure.Extensions;
 
@@ -8,24 +6,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddControllers();
-builder.Services.AddProblemDetails();
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireAuthenticatedUser().RequireRole("admin"))
-    .AddPolicy(AuthorizationPolicies.CatalogRead, policy => policy.RequireAuthenticatedUser().RequireRole("staff", "admin"))
-    .AddPolicy(AuthorizationPolicies.CatalogManage, policy => policy.RequireAuthenticatedUser().RequireRole("admin"));
+builder.Services.AddApiServices(builder.Configuration);
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
-app.UseStatusCodePages();
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapGet("/", () => "SARE API is running!");
-app.MapControllers();
+app.UseApiPipeline();
+await app.SeedDatabaseAsync();
 
 app.Run();
 
