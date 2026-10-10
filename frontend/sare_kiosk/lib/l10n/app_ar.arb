@@ -1,13 +1,13 @@
 {
   "@@locale": "ar",
-  "appName": "عربة ساريع الذكية",
+  "appName": "عربة SARE الذكية",
   "welcomeTitle": "مرحبًا بك في التسوق الذكي",
-  "welcomeSubtitle": "تسوق بسلاسة وسرعة مع عربة ساريع المدعومة بالذكاء الاصطناعي والميزان الحساس",
+  "welcomeSubtitle": "تسوق بسلاسة وسرعة مع عربة SARE المدعومة بالذكاء الاصطناعي والميزان الحساس",
   "startAsGuest": "ابدأ التسوق كزائر / ضيف",
   "startAsGuestDescription": "بدون أي تسجيل مسبق. تسوق وادفع وغادر في أي وقت.",
   "orDivider": "أو",
-  "loyaltySignIn": "تسجيل الدخول ببطاقة الولاء",
-  "tapCardOrQr": "مرر بطاقة الولاء NFC على مقبض العربة أو امسح الـ QR عبر تطبيق الهاتف",
+  "loyaltySignIn": "تسجيل دخول الأعضاء",
+  "tapCardOrQr": "مرر بطاقة العضوية (NFC) على مقبض العربة للتعرف على حسابك فورًا",
   "cartTitle": "سلة المشتريات",
   "emptyCartMessage": "السلة فارغة حاليًّا. امسح باركود المنتج لتبدأ التسوق!",
   "itemAddedSuccess": "تمت إضافة المنتج ومطابقة الوزن بنجاح",
@@ -25,5 +25,7 @@
   "checkoutButton": "إتمام الشراء والدفع",
   "cancelCheckout": "الرجوع للسلة",
   "cartNumberLabel": "عربة رقم {cartNumber}",
-  "switchLanguage": "العربية"
+  "switchLanguage": "English",
+  "themeLight": "الوضع النهاري",
+  "themeDark": "الوضع الليلي"
 }

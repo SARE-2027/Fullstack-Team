@@ -30,11 +30,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get orDivider => 'OR';
 
   @override
-  String get loyaltySignIn => 'Sign In with Loyalty Card';
+  String get loyaltySignIn => 'Member Sign-in';
 
   @override
   String get tapCardOrQr =>
-      'Tap your NFC card on the cart handle or scan QR via mobile app';
+      'Tap your Membership card (NFC) on the cart handle to access your account';
 
   @override
   String get cartTitle => 'Shopping Cart';
@@ -92,5 +92,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get switchLanguage => 'English';
+  String get switchLanguage => 'العربية';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get themeDark => 'Dark';
 }

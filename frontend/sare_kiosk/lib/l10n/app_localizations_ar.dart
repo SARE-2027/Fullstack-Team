@@ -10,14 +10,14 @@ class AppLocalizationsAr extends AppLocalizations {
   AppLocalizationsAr([String locale = 'ar']) : super(locale);
 
   @override
-  String get appName => 'عربة ساريع الذكية';
+  String get appName => 'عربة SARE الذكية';
 
   @override
   String get welcomeTitle => 'مرحبًا بك في التسوق الذكي';
 
   @override
   String get welcomeSubtitle =>
-      'تسوق بسلاسة وسرعة مع عربة ساريع المدعومة بالذكاء الاصطناعي والميزان الحساس';
+      'تسوق بسلاسة وسرعة مع عربة SARE المدعومة بالذكاء الاصطناعي والميزان الحساس';
 
   @override
   String get startAsGuest => 'ابدأ التسوق كزائر / ضيف';
@@ -30,11 +30,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get orDivider => 'أو';
 
   @override
-  String get loyaltySignIn => 'تسجيل الدخول ببطاقة الولاء';
+  String get loyaltySignIn => 'تسجيل دخول الأعضاء';
 
   @override
   String get tapCardOrQr =>
-      'مرر بطاقة الولاء NFC على مقبض العربة أو امسح الـ QR عبر تطبيق الهاتف';
+      'مرر بطاقة العضوية (NFC) على مقبض العربة للتعرف على حسابك فورًا';
 
   @override
   String get cartTitle => 'سلة المشتريات';
@@ -92,5 +92,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get switchLanguage => 'العربية';
+  String get switchLanguage => 'English';
+
+  @override
+  String get themeLight => 'الوضع النهاري';
+
+  @override
+  String get themeDark => 'الوضع الليلي';
 }

@@ -71,3 +71,6 @@ class CustomText extends StatelessWidget {
     );
   }
 }
+
+/// Alias for [CustomText] providing unified `Kiosk...` component naming.
+typedef KioskText = CustomText;

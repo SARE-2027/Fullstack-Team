@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/utils/window_theme_helper.dart';
 import 'features/check_in/presentation/screens/welcome_check_in_screen.dart';
 import 'l10n/app_localizations.dart';
 
@@ -18,6 +19,19 @@ class SareKioskApp extends StatefulWidget {
 
 class _SareKioskAppState extends State<SareKioskApp> {
   Locale _locale = const Locale('ar');
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
+  void initState() {
+    super.initState();
+    // Synchronize host window title bar and center window upon startup
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WindowThemeHelper.updateTitleBarTheme(
+        isDark: _themeMode == ThemeMode.dark,
+      );
+      WindowThemeHelper.centerWindow();
+    });
+  }
 
   void _toggleLocale() {
     setState(() {
@@ -27,6 +41,15 @@ class _SareKioskAppState extends State<SareKioskApp> {
     });
   }
 
+  void _toggleThemeMode() {
+    final nextMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    setState(() {
+      _themeMode = nextMode;
+    });
+    WindowThemeHelper.updateTitleBarTheme(isDark: nextMode == ThemeMode.dark);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -34,12 +57,14 @@ class _SareKioskAppState extends State<SareKioskApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark,
+      themeMode: _themeMode,
       locale: _locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       home: WelcomeCheckInScreen(
         onToggleLocale: _toggleLocale,
+        onToggleTheme: _toggleThemeMode,
+        isDarkMode: _themeMode == ThemeMode.dark,
       ),
     );
   }

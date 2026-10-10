@@ -137,13 +137,13 @@ abstract class AppLocalizations {
   /// No description provided for @loyaltySignIn.
   ///
   /// In en, this message translates to:
-  /// **'Sign In with Loyalty Card'**
+  /// **'Member Sign-in'**
   String get loyaltySignIn;
 
   /// No description provided for @tapCardOrQr.
   ///
   /// In en, this message translates to:
-  /// **'Tap your NFC card on the cart handle or scan QR via mobile app'**
+  /// **'Tap your Membership card (NFC) on the cart handle to access your account'**
   String get tapCardOrQr;
 
   /// No description provided for @cartTitle.
@@ -251,8 +251,20 @@ abstract class AppLocalizations {
   /// No description provided for @switchLanguage.
   ///
   /// In en, this message translates to:
-  /// **'English'**
+  /// **'العربية'**
   String get switchLanguage;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
 }
 
 class _AppLocalizationsDelegate

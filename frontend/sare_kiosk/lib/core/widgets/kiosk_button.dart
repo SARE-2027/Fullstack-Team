@@ -78,30 +78,61 @@ class KioskButton extends StatelessWidget {
           ),
           const SizedBox(width: 12),
         ] else if (icon != null) ...[
-          Icon(icon, size: 22, color: foregroundColor),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => ScaleTransition(
+              scale: animation,
+              child: FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+            ),
+            child: Icon(
+              icon,
+              key: ValueKey(icon),
+              size: 22,
+              color: foregroundColor,
+            ),
+          ),
           const SizedBox(width: 10),
         ],
         Flexible(
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: CustomText(
-              text,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: foregroundColor,
-              maxLines: 1,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+              child: CustomText(
+                text,
+                key: ValueKey(text),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: foregroundColor,
+                maxLines: 1,
+              ),
             ),
           ),
         ),
       ],
     );
 
-    return SizedBox(
-      height: height,
-      width: width,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.center,
+      child: SizedBox(
+        height: height,
+        width: width,
+        child: ElevatedButton(
+          onPressed: isLoading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
@@ -114,6 +145,7 @@ class KioskButton extends StatelessWidget {
         ),
         child: content,
       ),
-    );
+    ),
+  );
   }
 }
