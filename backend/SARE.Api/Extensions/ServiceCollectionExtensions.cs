@@ -14,8 +14,21 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
+        services.AddScoped<ICartNotificationService, SignalRCartNotificationService>();
 
         services.AddControllers();
+        services.AddSignalR();
+
+        services.AddCors(options =>
+        {
+            options.AddPolicy("AllowAll", policy =>
+            {
+                policy.SetIsOriginAllowed(_ => true)
+                      .AllowAnyMethod()
+                      .AllowAnyHeader()
+                      .AllowCredentials();
+            });
+        });
 
         services.AddJwtAuthentication(configuration);
         services.AddSwaggerDocumentation();

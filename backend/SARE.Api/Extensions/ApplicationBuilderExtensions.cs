@@ -1,3 +1,4 @@
+using SARE.Api.Hubs;
 using SARE.Infrastructure.Persistence;
 
 namespace SARE.Api.Extensions;
@@ -12,10 +13,14 @@ public static class ApplicationBuilderExtensions
             app.UseSwaggerUI();
         }
 
+        app.UseCors("AllowAll");
+
         app.UseAuthentication();
         app.UseAuthorization();
 
         app.MapControllers();
+        app.MapHub<CartHub>("/hubs/cart");
+
         app.MapGet("/", () => "SARE API is running!");
 
         return app;
