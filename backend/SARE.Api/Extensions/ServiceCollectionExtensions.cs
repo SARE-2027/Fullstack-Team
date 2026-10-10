@@ -79,9 +79,9 @@ public static class ServiceCollectionExtensions
         });
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, "admin"))
-            .AddPolicy(AuthorizationPolicies.CatalogRead, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, UserRoles.Staff, "admin", "staff"))
-            .AddPolicy(AuthorizationPolicies.CatalogManage, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, "admin"));
+            .AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin))
+            .AddPolicy(AuthorizationPolicies.CatalogRead, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin, UserRoles.Staff))
+            .AddPolicy(AuthorizationPolicies.CatalogManage, policy => policy.RequireAuthenticatedUser().RequireRole(UserRoles.Admin));
 
         return services;
     }
