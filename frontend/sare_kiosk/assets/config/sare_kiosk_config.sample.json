@@ -1,0 +1,9 @@
+{
+  "cart_id": "CART-01",
+  "cart_number": "01",
+  "api_base_url": "http://192.168.1.100:5000",
+  "mqtt_broker": "192.168.1.100",
+  "mqtt_port": 1883,
+  "is_scale_ready": true,
+  "location_name": "Main Supermarket Floor"
+}

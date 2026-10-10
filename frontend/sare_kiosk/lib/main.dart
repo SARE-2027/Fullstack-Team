@@ -1,17 +1,24 @@
 import 'package:flutter/material.dart';
 
+import 'core/config/kiosk_config_exports.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/window_theme_helper.dart';
 import 'features/check_in/presentation/screens/welcome_check_in_screen.dart';
 import 'l10n/app_localizations.dart';
 
-void main() {
+void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SareKioskApp());
+  final config = await KioskConfigService.load(args: args);
+  runApp(SareKioskApp(config: config));
 }
 
 class SareKioskApp extends StatefulWidget {
-  const SareKioskApp({super.key});
+  const SareKioskApp({
+    super.key,
+    this.config = const KioskConfig(),
+  });
+
+  final KioskConfig config;
 
   @override
   State<SareKioskApp> createState() => _SareKioskAppState();
@@ -52,7 +59,9 @@ class _SareKioskAppState extends State<SareKioskApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return KioskConfigScope(
+      config: widget.config,
+      child: MaterialApp(
       title: 'SARE Smart Kiosk',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
@@ -66,6 +75,7 @@ class _SareKioskAppState extends State<SareKioskApp> {
         onToggleTheme: _toggleThemeMode,
         isDarkMode: _themeMode == ThemeMode.dark,
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/config/kiosk_config_exports.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -22,6 +23,7 @@ class WelcomeCheckInScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.colors;
+    final config = context.kioskConfig;
 
     return Scaffold(
       body: SafeArea(
@@ -58,7 +60,7 @@ class WelcomeCheckInScreen extends StatelessWidget {
                             size: 18,
                             color: colors.secondaryText,
                           ),
-                          label: l10n.cartNumberLabel('01'),
+                          label: l10n.cartNumberLabel(config.cartNumber),
                           borderColor: colors.containerBorder,
                         ),
                         const SizedBox(width: 12),
@@ -67,14 +69,22 @@ class WelcomeCheckInScreen extends StatelessWidget {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: colors.weightVerified,
+                              color: config.isScaleReady
+                                  ? colors.weightVerified
+                                  : colors.weightDiscrepancy,
                               shape: BoxShape.circle,
                             ),
                           ),
-                          label: 'Scale Ready',
-                          backgroundColor:
-                              colors.weightVerified.withValues(alpha: 0.12),
-                          textColor: colors.weightVerified,
+                          label: config.isScaleReady
+                              ? 'Scale Ready'
+                              : 'Scale Offline',
+                          backgroundColor: (config.isScaleReady
+                                  ? colors.weightVerified
+                                  : colors.weightDiscrepancy)
+                              .withValues(alpha: 0.12),
+                          textColor: config.isScaleReady
+                              ? colors.weightVerified
+                              : colors.weightDiscrepancy,
                         ),
                       ],
                     ),
