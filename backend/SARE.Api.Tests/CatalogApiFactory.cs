@@ -13,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using SARE.Domain.Catalog;
+using SARE.Domain.Users;
 using SARE.Infrastructure.Persistence;
 using SARE.Infrastructure.Storage;
 using SARE.Application.Common.Interfaces;
@@ -73,6 +74,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
 
     public string CreateToken(string role = "admin", bool expired = false, bool invalidSignature = false)
     {
+        role = UserRoles.All.FirstOrDefault(name => string.Equals(name, role, StringComparison.OrdinalIgnoreCase)) ?? role;
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(Issuer, Audience,
             [new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()), new Claim("role", role)],

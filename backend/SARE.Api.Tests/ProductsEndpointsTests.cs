@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SARE.Application.Common.DTOs;
 using SARE.Application.DTOs.Catalog;
@@ -60,7 +61,6 @@ public sealed class ProductsEndpointsTests : IAsyncLifetime
         var details = (await _client.GetFromJsonAsync<ProductDetailResponse>(create.Headers.Location))!;
         Assert.Equal(created, details.Product);
         Assert.Empty(details.Options);
-        Assert.Empty(details.Variants);
         // Products are created before their variants; the customer sees them once an active variant exists.
         Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"{PublicRoute}/{created.Id}")).StatusCode);
 
@@ -124,8 +124,6 @@ public sealed class ProductsEndpointsTests : IAsyncLifetime
         Assert.Equal(2000, item.MaxPriceMinor);
 
         var detail = (await _client.GetFromJsonAsync<ProductPublicDetailResponse>($"{PublicRoute}/{seed.Visible.Id}"))!;
-        Assert.Equal(2, detail.Variants.Count);
-        Assert.DoesNotContain(detail.Variants, variant => variant.Barcode == "hidden-barcode");
         Assert.Equal(2, Assert.Single(detail.Options).Values.Count);
         foreach (var hidden in new[] { seed.Inactive, seed.Empty, seed.NoActiveVariants })
             Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"{PublicRoute}/{hidden.Id}")).StatusCode);
@@ -146,7 +144,6 @@ public sealed class ProductsEndpointsTests : IAsyncLifetime
         var page = (await _client.GetFromJsonAsync<PagedResponse<ProductResponse>>(StaffRoute))!;
         Assert.Equal(5, page.TotalCount);
         var details = (await _client.GetFromJsonAsync<ProductDetailResponse>($"{StaffRoute}/{seed.Visible.Id}"))!;
-        Assert.Equal(3, details.Variants.Count);
         Assert.Equal(2, details.Options.Count);
         Assert.Equal(3, details.Options.Single(option => option.NameEn == "Size").Values.Count);
         var summary = (await _client.GetFromJsonAsync<ProductDashboardResponse>(DashboardRoute))!;
@@ -154,6 +151,35 @@ public sealed class ProductsEndpointsTests : IAsyncLifetime
         var forbidden = await _client.PatchAsJsonAsync($"{AdminRoute}/{seed.Visible.Id}/status", new ProductStatusRequest(false));
         Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
         await _factory.InDatabaseAsync(async context => Assert.True((await context.Products.FindAsync(seed.Visible.Id))!.IsActive));
+    }
+
+    [Theory]
+    [InlineData("admin")]
+    [InlineData("staff")]
+    [InlineData(null)]
+    public async Task ProductListsAndDetailsReturnOptionsAndValuesWithoutVariants(string? role)
+    {
+        var seed = await SeedCatalogAsync();
+        UseRole(role);
+        var route = role is null ? PublicRoute : $"/api/v1/{role}/products";
+        var page = await _client.GetFromJsonAsync<JsonElement>(route);
+        foreach (var item in page.GetProperty("items").EnumerateArray())
+        {
+            Assert.False(item.TryGetProperty("variants", out _));
+            var detail = await _client.GetFromJsonAsync<JsonElement>($"{route}/{item.GetProperty("id").GetGuid()}");
+            Assert.False(detail.TryGetProperty("variants", out _));
+            Assert.False(detail.GetProperty("product").TryGetProperty("variants", out _));
+            Assert.Equal(detail.GetProperty("options").GetRawText(), item.GetProperty("options").GetRawText());
+        }
+        var paged = await _client.GetFromJsonAsync<JsonElement>($"{route}?categoryId={seed.Category.Id}&search=Chips&pageSize=1");
+        var product = Assert.Single(paged.GetProperty("items").EnumerateArray());
+        Assert.Equal(seed.Visible.Id, product.GetProperty("id").GetGuid());
+        var options = product.GetProperty("options").Deserialize<ProductOptionResponse[]>(JsonSerializerOptions.Web)!;
+        Assert.Equal(role is null ? 1 : 2, options.Length);
+        Assert.Equal(role is null ? 2 : 3, options.Single(option => option.NameEn == "Size").Values.Count);
+        var secondPage = await _client.GetFromJsonAsync<JsonElement>($"{route}?page=2&pageSize=1");
+        Assert.Equal(page.GetProperty("items")[1].GetRawText(),
+            Assert.Single(secondPage.GetProperty("items").EnumerateArray()).GetRawText());
     }
 
     [Fact]

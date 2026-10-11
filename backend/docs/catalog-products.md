@@ -1,15 +1,15 @@
 # Products API
 
-This feature adds product management, customer browsing, staff inspection, and product dashboard statistics. The integrated Identity roles are `Customer`, `Staff`, and `Admin`; catalog policies also accept the existing lowercase development roles. See [integration notes](integration-startup.md).
+This feature adds product management, customer browsing, staff inspection, and product dashboard statistics. The integrated Identity roles are `Customer`, `Staff`, and `Admin`. See [integration notes](integration-startup.md).
 
 ## Permissions and endpoints
 
 | Method | Route | Access | Behavior |
 | --- | --- | --- | --- |
 | GET | `/api/v1/products` | Everyone, including guests | Search, category filter, sorting, and pagination over available products. |
-| GET | `/api/v1/products/{productId}` | Everyone, including guests | Product details, active variants, and the option values used by those variants. |
+| GET | `/api/v1/products/{productId}` | Everyone, including guests | Product details and options/values available through active variants. |
 | GET | `/api/v1/staff/products` | Staff and admin | All products, including inactive products; search, filters, sorting, and pagination. |
-| GET | `/api/v1/staff/products/{productId}` | Staff and admin | Full product details, including inactive variants and all options/values. |
+| GET | `/api/v1/staff/products/{productId}` | Staff and admin | Product details and all options/values. |
 | GET | `/api/v1/admin/products` | Admin | Full product listing with filters and variant counts. |
 | GET | `/api/v1/admin/products/{productId}` | Admin | Full product details. |
 | POST | `/api/v1/admin/products` | Admin | Create a product, returning `201` and its detail URL in `Location`. |
@@ -66,13 +66,15 @@ The `isActive` field is required on PATCH. Deactivation changes the parent produ
 
 Lists return `items`, `totalCount`, `page`, and `pageSize`. `totalCount` counts matching products before pagination. Search/filtering/projection/counts run in the database; variants are not loaded just to count or search them.
 
+Each product in a list includes `options`, with each option's `values`, as in product details. Options/values are bulk-loaded only for products on the requested page. Public reads include choices used by active variants; staff/admin reads include all options/values. Lists do not return a `variants` array. Product write responses retain their basic fields and omit `options`. `ProductSummaryResponse` is the public product listing contract; dashboard counts use the separate `ProductDashboardResponse`.
+
 ## Customer visibility and details
 
 A product is available when its own `isActive` flag is true and it has at least one active variant. A newly created product without variants remains visible to staff/admin while it is prepared; the public API returns it once an active variant exists. Inactive and unavailable product detail URLs return `404`.
 
 Public listings include category names and the minimum/maximum prices among active variants, in minor currency units. Public barcode searches consider active variants only. Staff/admin barcode searches can also find inactive variants.
 
-Both detail endpoints return a `product` object, `options`, and `variants`. Public detail includes only active variants and the option values those variants use. Staff/admin detail includes all variants, options, and values. Admin detail carries variant status and update timestamps; public detail provides the available variant's barcode, price, weight, and selected option value IDs.
+Product detail endpoints return a `product` object and `options`, each with its `values`. They do not return variants. Public detail includes options/values used by active variants; staff/admin detail includes all options/values. The existing `/products/{productId}/variants` routes return paginated variants separately. Existing product counts, price ranges, and dashboard endpoints are unchanged.
 
 ## Dashboard
 

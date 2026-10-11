@@ -31,6 +31,12 @@ Query parameters: `search` (name/barcode, case insensitive, maximum 150 characte
 
 Public variants require both product and variant to be active; unavailable IDs/barcodes return `404`. The response includes product/category IDs and product names for scanner/cart use. Disabling a variant preserves its links and invoice references; it continues reserving its barcode. A product with no active variants is unavailable through public product routes.
 
+Variant responses keep their existing fields and `optionValueIds`, and add `options`. Each entry has `id`, `nameAr`, `nameEn`, `values` (`id`, `valueAr`, `valueEn`), and `selectedValueId`. This applies to detail, barcode, list, and write responses. `selectedValueId` is derived from the variant's associations; it is `null` when this variant has no selection for an option.
+
+The options/values belong to the parent product. Staff/admin see all choices, including unused options and options without values. Public reads expose choices used by active sibling variants, even if the requested variant/page does not select them; inactive-only and unused values remain hidden. Choices are bulk-loaded for products represented on the page. Options and values keep their existing ordering by English name/value then ID.
+
+The write body is unchanged: option/value management endpoints edit possible choices, while variant POST/PUT with `optionValueIds` select choices. Response fields are not written back as entities. No database migration or separate association CRUD is needed. For customers, changing a choice must resolve to an existing available variant; the presence of individual values does not guarantee every combination exists.
+
 POST returns `201` and Location; PUT/PATCH return `200`. Invalid inputs/mappings return `400`; barcode conflicts and concurrent changes return `409`; wrong parent/child IDs return `404`.
 
 All catalog child writes update the parent product timestamp. That timestamp is also an optimistic concurrency token: if another request modifies the product after it was read, EF rejects the stale write and rolls back the entire operation. `ProtectCatalogEdits` captures this mapping; it adds no columns or tables. Apply migrations normally with `dotnet ef database update --project backend/SARE.Infrastructure --startup-project backend/SARE.Api`.

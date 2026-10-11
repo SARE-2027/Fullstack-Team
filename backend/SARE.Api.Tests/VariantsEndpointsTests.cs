@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SARE.Application.Common.DTOs;
 using SARE.Application.DTOs.Catalog;
@@ -36,6 +37,8 @@ public sealed class VariantsEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var variant = (await response.Content.ReadFromJsonAsync<ProductVariantResponse>())!;
         Assert.Equal("chips-1", variant.Barcode); Assert.Equal(small, Assert.Single(variant.OptionValueIds));
+        Assert.Equal(small, Assert.Single(variant.Options).SelectedValueId);
+        Assert.Equal(2, Assert.Single(variant.Options).Values.Count);
         Assert.Equal($"/api/v1/admin/variants/{variant.Id}", response.Headers.Location!.AbsolutePath);
         Assert.Equal(variant.Id, (await _client.GetFromJsonAsync<ProductVariantResponse>(response.Headers.Location))!.Id);
         Assert.Equal(variant.Id, (await _client.GetFromJsonAsync<ProductVariantResponse>("/api/v1/admin/variants/by-barcode/chips-1"))!.Id);
@@ -47,6 +50,7 @@ public sealed class VariantsEndpointsTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         var updated = (await update.Content.ReadFromJsonAsync<ProductVariantResponse>())!;
         Assert.Equal(2000, updated.PriceMinor); Assert.Equal(large, Assert.Single(updated.OptionValueIds));
+        Assert.Equal(large, Assert.Single(updated.Options).SelectedValueId);
         Assert.True(updated.UpdatedAt > variant.UpdatedAt);
         Assert.Equal(HttpStatusCode.OK, (await _client.PutAsJsonAsync($"{Route}/{variant.Id}", Request("code/2", [large]))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync("/api/v1/admin/variants/by-barcode/chips-1")).StatusCode);
@@ -68,6 +72,68 @@ public sealed class VariantsEndpointsTests : IAsyncLifetime
         await _client.PatchAsJsonAsync($"/api/v1/admin/products/{_productId}/status", new ProductStatusRequest(false));
         Assert.Equal(HttpStatusCode.NotFound, (await _client.GetAsync($"/api/v1/variants/{variant.Id}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync($"/api/v1/staff/variants/{variant.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task VariantReadsReturnSiblingChoicesAndNullableSelectionWithoutLeakingInactiveValues()
+    {
+        var (size, small, large) = await CreateOptionAsync();
+        var optionsRoute = $"/api/v1/admin/products/{_productId}/options";
+        var color = (await (await _client.PostAsJsonAsync(optionsRoute, new ProductOptionRequest("اللون", "Color")))
+            .Content.ReadFromJsonAsync<ProductOptionResponse>())!;
+        var red = (await (await _client.PostAsJsonAsync($"{optionsRoute}/{color.Id}/values", new ProductOptionValueRequest("أحمر", "Red")))
+            .Content.ReadFromJsonAsync<ProductOptionValueResponse>())!;
+        var blue = (await (await _client.PostAsJsonAsync($"{optionsRoute}/{color.Id}/values", new ProductOptionValueRequest("أزرق", "Blue")))
+            .Content.ReadFromJsonAsync<ProductOptionValueResponse>())!;
+        var unused = (await (await _client.PostAsJsonAsync(optionsRoute, new ProductOptionRequest("خيار جديد", "Unused")))
+            .Content.ReadFromJsonAsync<ProductOptionResponse>())!;
+        var first = (await (await _client.PostAsJsonAsync(Route, Request("A-small-red", [small, red.Id])))
+            .Content.ReadFromJsonAsync<ProductVariantResponse>())!;
+        var second = (await (await _client.PostAsJsonAsync(Route, Request("B-large-blue", [large, blue.Id])))
+            .Content.ReadFromJsonAsync<ProductVariantResponse>())!;
+        var empty = (await (await _client.PostAsJsonAsync(Route, Request("C-unselected", [])))
+            .Content.ReadFromJsonAsync<ProductVariantResponse>())!;
+        var hidden = (await (await _client.PostAsJsonAsync($"{optionsRoute}/{color.Id}/values", new ProductOptionValueRequest("أخضر", "Green")))
+            .Content.ReadFromJsonAsync<ProductOptionValueResponse>())!;
+        await _client.PostAsJsonAsync(Route, Request("D-inactive", [hidden.Id]) with { IsActive = false });
+
+        foreach (var audience in new[] { "admin", "staff", "public" })
+        {
+            SetRole(audience == "public" ? null : audience);
+            var prefix = audience == "public" ? "/api/v1" : $"/api/v1/{audience}";
+            foreach (var route in new[] { $"{prefix}/variants/{first.Id}", $"{prefix}/variants/by-barcode/{first.Barcode}",
+                $"{prefix}/variants/by-barcode?barcode={first.Barcode}", $"{prefix}/variants/{empty.Id}" })
+                Check(await _client.GetFromJsonAsync<JsonElement>(route));
+            foreach (var route in new[] { $"{prefix}/variants", $"{prefix}/products/{_productId}/variants" })
+            {
+                var page = await _client.GetFromJsonAsync<JsonElement>($"{route}?page=2&pageSize=1");
+                var item = Assert.Single(page.GetProperty("items").EnumerateArray());
+                Assert.Equal(second.Id, item.GetProperty("id").GetGuid());
+                Check(item);
+            }
+
+            void Check(JsonElement response)
+            {
+                Assert.False(response.TryGetProperty("optionValues", out _));
+                var selected = response.GetProperty("optionValueIds").EnumerateArray().Select(value => value.GetGuid()).ToArray();
+                var options = response.GetProperty("options").Deserialize<VariantOptionResponse[]>(JsonSerializerOptions.Web)!;
+                Assert.Equal(audience == "public" ? 2 : 3, options.Length);
+                Assert.Equal(new[] { small, large }.Order(), options.Single(option => option.Id == size).Values.Select(value => value.Id).Order());
+                Assert.Equal((audience == "public" ? new[] { red.Id, blue.Id } : [red.Id, blue.Id, hidden.Id]).Order(),
+                    options.Single(option => option.Id == color.Id).Values.Select(value => value.Id).Order());
+                foreach (var option in options)
+                    Assert.Equal(option.Values.SingleOrDefault(value => selected.Contains(value.Id))?.Id, option.SelectedValueId);
+                if (audience != "public")
+                {
+                    Assert.Null(options.Single(option => option.Id == unused.Id).SelectedValueId);
+                    Assert.Empty(options.Single(option => option.Id == unused.Id).Values);
+                }
+            }
+        }
+        SetRole("admin");
+        await _client.PutAsJsonAsync($"{optionsRoute}/{color.Id}", new ProductOptionRequest("لون المنتج", "Product color"));
+        var refreshed = (await _client.GetFromJsonAsync<ProductVariantResponse>($"/api/v1/admin/variants/{first.Id}"))!;
+        Assert.Equal("Product color", refreshed.Options.Single(option => option.Id == color.Id).NameEn);
     }
 
     [Fact]

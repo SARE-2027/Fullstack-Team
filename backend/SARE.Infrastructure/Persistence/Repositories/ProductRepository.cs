@@ -11,29 +11,45 @@ namespace SARE.Infrastructure.Persistence.Repositories;
 
 public sealed class ProductRepository(AppDbContext context) : IProductRepository
 {
-    public Task<PagedResponse<ProductResponse>> GetPageAsync(AdminProductQuery query, CancellationToken cancellationToken)
+    public async Task<PagedResponse<ProductResponse>> GetPageAsync(AdminProductQuery query, CancellationToken cancellationToken)
     {
         var products = context.Products.AsNoTracking();
-        if (query.IsActive.HasValue) products = products.Where(product => product.IsActive == query.IsActive.Value);
-        return GetPageAsync(products, query, AdminProjection(), includeInactiveVariants: true, cancellationToken);
+        if (query.IsActive.HasValue)
+        {
+            products = products.Where(product => product.IsActive == query.IsActive.Value);
+        }
+
+        var page = await GetPageAsync(products, query, AdminProjection(), includeInactiveVariants: true, cancellationToken);
+        var productIds = page.Items.Select(product => product.Id).ToArray();
+        var optionsByProduct = await ReadOptionsAsync(context, productIds, publicOnly: false, cancellationToken);
+        var items = page.Items.Select(product => product with
+        {
+            Options = optionsByProduct.GetValueOrDefault(product.Id, [])
+        }).ToArray();
+
+        return page with { Items = items };
     }
 
-    public Task<PagedResponse<ProductSummaryResponse>> GetPublicPageAsync(ProductQuery query, CancellationToken cancellationToken) =>
-        GetPageAsync(AvailableProducts(), query, PublicProjection(), includeInactiveVariants: false, cancellationToken);
+    public async Task<PagedResponse<ProductSummaryResponse>> GetPublicPageAsync(ProductQuery query, CancellationToken cancellationToken)
+    {
+        var page = await GetPageAsync(AvailableProducts(), query, PublicProjection(), includeInactiveVariants: false, cancellationToken);
+        var productIds = page.Items.Select(product => product.Id).ToArray();
+        var optionsByProduct = await ReadOptionsAsync(context, productIds, publicOnly: true, cancellationToken);
+        var items = page.Items.Select(product => product with
+        {
+            Options = optionsByProduct.GetValueOrDefault(product.Id, [])
+        }).ToArray();
+
+        return page with { Items = items };
+    }
 
     public async Task<ProductDetailResponse?> GetDetailsAsync(Guid id, CancellationToken cancellationToken)
     {
         var product = await GetSummaryAsync(id, cancellationToken);
         if (product is null) return null;
 
-        var variants = await context.ProductVariants.AsNoTracking().Where(variant => variant.ProductId == id)
-            .OrderBy(variant => variant.Barcode).ThenBy(variant => variant.Id).ToListAsync(cancellationToken);
-        var links = await GetLinksAsync(variants.Select(variant => variant.Id).ToArray(), cancellationToken);
-        var options = await GetOptionsAsync(id, null, cancellationToken);
-        return new ProductDetailResponse(product, options, variants.Select(variant => new ProductVariantResponse(
-            variant.Id, variant.ProductId, variant.Barcode, variant.PriceMinor, variant.WeightG,
-            variant.IsActive, variant.UpdatedAt, links.Where(link => link.VariantId == variant.Id)
-                .Select(link => link.OptionValueId).Order().ToArray())).ToList());
+        var options = await ReadOptionsAsync(context, [id], false, cancellationToken);
+        return new ProductDetailResponse(product, options.GetValueOrDefault(id, []));
     }
 
     public Task<ProductResponse?> GetSummaryAsync(Guid id, CancellationToken cancellationToken) =>
@@ -46,16 +62,8 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
             .Select(PublicProjection()).SingleOrDefaultAsync(cancellationToken);
         if (product is null) return null;
 
-        var variants = await context.ProductVariants.AsNoTracking()
-            .Where(variant => variant.ProductId == id && variant.IsActive)
-            .OrderBy(variant => variant.Barcode).ThenBy(variant => variant.Id).ToListAsync(cancellationToken);
-        if (variants.Count == 0) return null;
-        var links = await GetLinksAsync(variants.Select(variant => variant.Id).ToArray(), cancellationToken);
-        var options = await GetOptionsAsync(id, links.Select(link => link.OptionValueId).Distinct().ToArray(), cancellationToken);
-        return new ProductPublicDetailResponse(product, options,
-            variants.Select(variant => new ProductVariantSummaryResponse(
-                variant.Id, variant.Barcode, variant.PriceMinor, variant.WeightG,
-                links.Where(link => link.VariantId == variant.Id).Select(link => link.OptionValueId).Order().ToArray())).ToList());
+        var options = await ReadOptionsAsync(context, [id], true, cancellationToken);
+        return new ProductPublicDetailResponse(product, options.GetValueOrDefault(id, []));
     }
 
     public async Task<ProductDashboardResponse> GetDashboardAsync(CancellationToken cancellationToken)
@@ -152,23 +160,63 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
         context.ProductVariants.Where(variant => variant.ProductId == product.Id && variant.IsActive)
             .Select(variant => (int?)variant.PriceMinor).Max());
 
-    private Task<List<VariantOptionValue>> GetLinksAsync(Guid[] variantIds, CancellationToken cancellationToken) =>
-        variantIds.Length == 0 ? Task.FromResult(new List<VariantOptionValue>())
-            : context.VariantOptionValues.AsNoTracking().Where(link => variantIds.Contains(link.VariantId)).ToListAsync(cancellationToken);
-
-    private async Task<IReadOnlyList<ProductOptionResponse>> GetOptionsAsync(Guid productId,
-        Guid[]? selectedValueIds, CancellationToken cancellationToken)
+    internal static async Task<Dictionary<Guid, IReadOnlyList<ProductOptionResponse>>> ReadOptionsAsync(
+        AppDbContext context,
+        Guid[] productIds,
+        bool publicOnly,
+        CancellationToken ct)
     {
-        var options = await context.ProductOptions.AsNoTracking().Where(option => option.ProductId == productId)
-            .OrderBy(option => option.NameEn).ThenBy(option => option.Id).ToListAsync(cancellationToken);
-        if (options.Count == 0) return [];
+        if (productIds.Length == 0)
+        {
+            return [];
+        }
+
+        var options = await context.ProductOptions
+            .AsNoTracking()
+            .Where(option => productIds.Contains(option.ProductId))
+            .OrderBy(option => option.NameEn)
+            .ThenBy(option => option.Id)
+            .ToListAsync(ct);
+
+        if (options.Count == 0)
+        {
+            return [];
+        }
+
         var optionIds = options.Select(option => option.Id).ToArray();
-        var valueQuery = context.ProductOptionValues.AsNoTracking().Where(value => optionIds.Contains(value.ProductOptionId));
-        if (selectedValueIds is not null) valueQuery = valueQuery.Where(value => selectedValueIds.Contains(value.Id));
-        var values = await valueQuery.OrderBy(value => value.ValueEn).ThenBy(value => value.Id).ToListAsync(cancellationToken);
-        return options.Where(option => selectedValueIds is null || values.Any(value => value.ProductOptionId == option.Id))
-            .Select(option => new ProductOptionResponse(option.Id, option.NameAr, option.NameEn,
-                values.Where(value => value.ProductOptionId == option.Id)
-                    .Select(value => new ProductOptionValueResponse(value.Id, value.ValueAr, value.ValueEn)).ToList())).ToList();
+        var valueQuery = context.ProductOptionValues
+            .AsNoTracking()
+            .Where(value => optionIds.Contains(value.ProductOptionId));
+
+        if (publicOnly)
+        {
+            valueQuery = valueQuery.Where(value => context.VariantOptionValues.Any(link =>
+                link.OptionValueId == value.Id &&
+                context.ProductVariants.Any(variant =>
+                    variant.Id == link.VariantId &&
+                    variant.IsActive &&
+                    context.ProductOptions.Any(option =>
+                        option.Id == value.ProductOptionId && option.ProductId == variant.ProductId))));
+        }
+
+        var values = await valueQuery
+            .OrderBy(value => value.ValueEn)
+            .ThenBy(value => value.Id)
+            .ToListAsync(ct);
+        var valuesByOption = values.ToLookup(value => value.ProductOptionId);
+        var optionsByProduct = options
+            .Where(option => !publicOnly || valuesByOption[option.Id].Any())
+            .GroupBy(option => option.ProductId);
+
+        return optionsByProduct.ToDictionary(
+            productOptions => productOptions.Key,
+            productOptions => (IReadOnlyList<ProductOptionResponse>)productOptions.Select(option =>
+            {
+                var optionValues = valuesByOption[option.Id]
+                    .Select(value => new ProductOptionValueResponse(value.Id, value.ValueAr, value.ValueEn))
+                    .ToArray();
+
+                return new ProductOptionResponse(option.Id, option.NameAr, option.NameEn, optionValues);
+            }).ToArray());
     }
 }

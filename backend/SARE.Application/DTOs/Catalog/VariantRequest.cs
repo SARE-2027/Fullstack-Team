@@ -17,4 +17,4 @@ public sealed record AdminVariantQuery : VariantQuery
 }
 public sealed record VariantLookupResponse(Guid Id, Guid ProductId, Guid CategoryId,
     string ProductNameAr, string ProductNameEn, string Barcode, int PriceMinor, int WeightG,
-    IReadOnlyList<Guid> OptionValueIds);
+    IReadOnlyList<Guid> OptionValueIds, IReadOnlyList<VariantOptionResponse> Options);
