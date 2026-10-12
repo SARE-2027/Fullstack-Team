@@ -46,15 +46,6 @@ public class CartNotificationService(
         }
     }
 
-    public async Task NotifyLowBatteryAsync(string cartId, short batteryPct, CancellationToken ct = default)
-    {
-        try
-        {
-            await hubContext.Clients.Group($"cart_{cartId}").SendAsync("LowBatteryWarning", new { CartId = cartId, BatteryPct = batteryPct }, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "تعذر إرسال تحذير انخفاض البطارية للعربة {CartId} عبر SignalR.", cartId);
-        }
-    }
+    public Task NotifyLowBatteryAsync(string cartId, short batteryPct, CancellationToken ct = default) =>
+        SendAsync($"cart_{cartId}", "LowBatteryWarning", new { CartId = cartId, BatteryPct = batteryPct }, ct);
 }

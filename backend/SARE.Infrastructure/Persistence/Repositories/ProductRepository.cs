@@ -160,17 +160,22 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
         context.ProductVariants.Where(variant => variant.ProductId == product.Id && variant.IsActive)
             .Select(variant => (int?)variant.PriceMinor).Max());
 
+    /// <summary>
+    /// يجلب كل الـ Options والـ Values لمجموعة منتجات دفعة واحدة (Batch Loading) في استعلامين SQL فقط لمنع مشكلة N+1 Query.
+    /// </summary>
     internal static async Task<Dictionary<Guid, IReadOnlyList<ProductOptionResponse>>> ReadOptionsAsync(
         AppDbContext context,
         Guid[] productIds,
         bool publicOnly,
         CancellationToken ct)
     {
+        // 1. فحص الحراسة: لو مفيش منتجات مبعوثة، نرجع فوراً بديكشنري فاضي بدون الذهاب للداتابيز
         if (productIds.Length == 0)
         {
             return [];
         }
 
+        // 2. [الاستعلام الأول]: جلب جميع الـ Options التابعة لهذه المنتجات دفعة واحدة
         var options = await context.ProductOptions
             .AsNoTracking()
             .Where(option => productIds.Contains(option.ProductId))
@@ -183,11 +188,15 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
             return [];
         }
 
+        // 3. تحضير الاستعلام الثاني لجلب الـ Values التابعة للـ Options التي تم جلبها
         var optionIds = options.Select(option => option.Id).ToArray();
         var valueQuery = context.ProductOptionValues
             .AsNoTracking()
             .Where(value => optionIds.Contains(value.ProductOptionId));
 
+        // 4. فلترة العرض العام (publicOnly):
+        // في حالة العرض للزبون، نستبعد أي قيمة غير مستخدمة في فاريانت نشط (Active Variant)
+        // حتى لا يظهر للزبون خيار في القائمة ليس له منتج متاح للبيع في المخزن.
         if (publicOnly)
         {
             valueQuery = valueQuery.Where(value => context.VariantOptionValues.Any(link =>
@@ -199,19 +208,29 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
                         option.Id == value.ProductOptionId && option.ProductId == variant.ProductId))));
         }
 
+        // 5. [الاستعلام الثاني]: تنفيذ استعلام الـ Values وترتيبها
         var values = await valueQuery
             .OrderBy(value => value.ValueEn)
             .ThenBy(value => value.Id)
             .ToListAsync(ct);
+
+        // 6. تجميع القيم في الذاكرة (ToLookup): خريطة Multi-Map حيث كل OptionId يشاور على قائمة الـ Values التابعة له بأمان
         var valuesByOption = values.ToLookup(value => value.ProductOptionId);
+
+        // 7. تجميع الـ Options لكل منتج (GroupBy ProductId):
+        // إذا كنا في وضع العرض العام، نستبعد أي أوبشن ليس له أي قيم متاحة للبيع
         var optionsByProduct = options
             .Where(option => !publicOnly || valuesByOption[option.Id].Any())
             .GroupBy(option => option.ProductId);
 
+        // 8. بناء الديكشنري النهائي:
+        // المفتاح: ProductId (الـ Key الخاص بكل جروب)
+        // القيمة: تحويل كل أوبشن ومصفوفة قيمه إلى ProductOptionResponse
         return optionsByProduct.ToDictionary(
             productOptions => productOptions.Key,
             productOptions => (IReadOnlyList<ProductOptionResponse>)productOptions.Select(option =>
             {
+                // تحويل كل Value تابعة لهذا الأوبشن إلى DTO
                 var optionValues = valuesByOption[option.Id]
                     .Select(value => new ProductOptionValueResponse(value.Id, value.ValueAr, value.ValueEn))
                     .ToArray();

@@ -55,23 +55,23 @@ public class CartService(
         int weightDelta = Math.Abs(request.MeasuredWeightG - variant.WeightG);
         bool isWeightValid = weightDelta <= DefaultWeightToleranceGrams;
 
+        var detectionEvent = new DetectionEvent
+        {
+            Id = request.EventId ?? Guid.NewGuid(),
+            SessionId = session.Id,
+            Source = request.Source,
+            DetectedBarcode = request.Barcode,
+            WeightDeltaG = request.MeasuredWeightG,
+            Outcome = isWeightValid ? DetectionOutcome.Accepted : DetectionOutcome.Rejected,
+            FinalBarcode = request.Barcode,
+            CreatedAt = DateTime.UtcNow
+        };
+
         if (!isWeightValid)
         {
             // Record Mismatch / Potential Fraud
-            var fraudEvent = new DetectionEvent
-            {
-                Id = request.EventId ?? Guid.NewGuid(),
-                SessionId = session.Id,
-                Source = request.Source,
-                DetectedBarcode = request.Barcode,
-                WeightDeltaG = request.MeasuredWeightG,
-                Outcome = DetectionOutcome.Rejected,
-                FinalBarcode = request.Barcode,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            if (!await sessionRepository.TryAddDetectionEventAsync(fraudEvent, cancellationToken))
-                return await ReplayCommittedDetectionAsync(fraudEvent.Id, sessionId, request, cancellationToken);
+            if (!await sessionRepository.TryAddDetectionEventAsync(detectionEvent, cancellationToken))
+                return await ReplayCommittedDetectionAsync(detectionEvent.Id, sessionId, request, cancellationToken);
 
             logger.LogWarning("Weight mismatch on cart {CartId}: Expected {Expected}g, Measured {Measured}g (Diff: {Diff}g)",
                 session.CartId, variant.WeightG, request.MeasuredWeightG, weightDelta);
@@ -104,24 +104,13 @@ public class CartService(
             AddedAt = DateTime.UtcNow
         };
 
-        var acceptedEvent = new DetectionEvent
-        {
-            Id = request.EventId ?? Guid.NewGuid(),
-            SessionId = session.Id,
-            SessionItemId = sessionItem.Id,
-            Source = request.Source,
-            DetectedBarcode = request.Barcode,
-            WeightDeltaG = request.MeasuredWeightG,
-            Outcome = DetectionOutcome.Accepted,
-            FinalBarcode = request.Barcode,
-            CreatedAt = DateTime.UtcNow
-        };
+        detectionEvent.SessionItemId = sessionItem.Id;
 
         session.TotalMinor += variant.PriceMinor;
         session.LastActivityAt = DateTime.UtcNow;
 
-        if (!await sessionRepository.TryAddSessionItemWithEventAsync(sessionItem, acceptedEvent, session, cancellationToken))
-            return await ReplayCommittedDetectionAsync(acceptedEvent.Id, sessionId, request, cancellationToken);
+        if (!await sessionRepository.TryAddSessionItemWithEventAsync(sessionItem, detectionEvent, session, cancellationToken))
+            return await ReplayCommittedDetectionAsync(detectionEvent.Id, sessionId, request, cancellationToken);
 
         // Broadcast the full committed session, including all active invoice items.
         var summary = await sessionService.GetSessionSummaryAsync(session.Id, cancellationToken);

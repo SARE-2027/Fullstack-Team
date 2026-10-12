@@ -20,14 +20,6 @@ public class CartController(ICartService cartService, ISessionService sessionSer
         return Ok(result);
     }
 
-    // GET: /api/carts/{cartId}/session
-    [HttpGet("/api/carts/{cartId}/session")]
-    public async Task<IActionResult> GetActiveSessionByCart(string cartId, CancellationToken ct)
-    {
-        var result = await sessionService.GetActiveSessionByCartIdAsync(cartId, ct);
-        return Ok(result);
-    }
-
     // POST: api/cart/session/start
     [HttpPost("session/start")]
     public async Task<ActionResult<CartSummaryResponse>> StartSession(
@@ -79,7 +71,9 @@ public class CartController(ICartService cartService, ISessionService sessionSer
     }
 
     // GET: api/cart/active/{cartId}
+    // GET: /api/carts/{cartId}/session
     [HttpGet("active/{cartId}")]
+    [HttpGet("/api/carts/{cartId}/session")]
     public async Task<ActionResult<CartSummaryResponse>> GetActiveSession(
         string cartId,
         CancellationToken cancellationToken)
