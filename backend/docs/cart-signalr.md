@@ -9,7 +9,9 @@ its Long Polling transport with TestServer, exercising the actual protocol,
 authentication, hub calls, services, database writes, and notifications.
 
 1. Register a `SessionUpdated` handler before connecting.
-2. Connect and invoke `JoinCartGroup(cartId, hardwareToken)`.
+2. Connect. An unprovisioned device first invokes `RegisterCart({})` and saves
+   its returned credentials to persistent storage. Then invoke
+   `JoinCartGroup(cartId, hardwareToken)` with the saved identity.
 3. Use its return value: the full open session with all active invoice items,
    or `null` if the cart has no open session. Closed history is not restored.
 4. Replace the affected session when `SessionUpdated` arrives. The payload has
@@ -25,13 +27,20 @@ Disconnecting does not close a session, and closing a session does not disconnec
 the device. It can stay connected for telemetry and the next shopper.
 
 The hardware token is a **device credential**, not a customer browser credential.
+Devices can provision themselves through `RegisterCart`; admins can also use
+`POST /api/v1/admin/carts`. Both use the same service. Registration is currently
+open to anonymous hub callers; an admin enrollment toggle is deferred.
+See [cart registration](cart-registration.md) for first-boot persistence,
+manual provisioning, and lost-acknowledgement limitations.
 The ordinary customer ownership/history flow is not implemented by these methods.
 Admins use their JWT and `JoinSessionsGroup()` for all-session updates, and load
 the initial collection through `GET /api/sessions`.
 
 ## Cart methods
 
-All commands require a successful join. Cart identity comes from the connection,
+All cart operation commands require a successful join. `RegisterCart` is the
+first-time provisioning exception and does not join or authenticate the connection.
+Cart identity comes from the connection,
 not a client-supplied `cartId` on each message. Switching carts unsubscribes the
 previous cart. Leaving removes command access. Commands recheck the device token
 against the current hash, so a replaced credential cannot keep issuing commands.
@@ -39,6 +48,7 @@ Detection and close commands also check that the session belongs to that cart.
 
 | Hub method | Arguments | Return value |
 | --- | --- | --- |
+| `RegisterCart` | `{}` or `{ "swVersion": "pi-v1" }`; version optional, max 32 characters after trimming. No JWT or join required. | `CartRegistrationResponse`: `cartId`, raw `hardwareToken`, string `status` (`active`), nullable `swVersion`. Save credentials, then join. |
 | `JoinCartGroup` | `cartId`, `hardwareToken` | Full open `CartSummaryResponse` or `null`. |
 | `StartSession` | `{ "nfcUid": null }` (or a registered NFC UID) | Full newly opened session. |
 | `ProcessItemDetection` | `sessionId`, `{ "eventId": "<UUID>", "barcode": "ITEM-1", "measuredWeightG": 50, "source": 1 }` | Existing `CartItemProcessResult` acknowledgement. |

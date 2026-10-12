@@ -22,6 +22,17 @@ public class CartHub(
 
     public static string SessionCartGroup(string cartId) => $"session_cart_{cartId}";
 
+    // First-time device provisioning is open for now; it does not join any groups.
+    [AllowAnonymous]
+    public Task<CartRegistrationResponse> RegisterCart(CreateCartRequest request) => ExecuteAsync(async () =>
+    {
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        if (Context.Items.ContainsKey(CartConnectionKey))
+            throw new HubException("CART_ALREADY_JOINED: This connection already has a cart identity.");
+
+        return await cartService.RegisterCartAsync(request, Context.ConnectionAborted);
+    });
+
     [Authorize(Policy = AuthorizationPolicies.Admin)]
     public Task JoinSessionsGroup()
     {
