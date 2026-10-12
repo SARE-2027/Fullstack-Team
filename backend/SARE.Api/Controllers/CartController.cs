@@ -30,11 +30,12 @@ public class CartController(ICartService cartService, ISessionService sessionSer
 
     // POST: api/cart/session/start
     [HttpPost("session/start")]
-    public async Task<ActionResult<CartSessionResponseDto>> StartSession(
+    public async Task<ActionResult<CartSummaryResponse>> StartSession(
         [FromBody] LegacyStartSessionRequest request,
         CancellationToken cancellationToken)
     {
-        var session = await cartService.StartSessionAsync(request, cancellationToken);
+        var session = await sessionService.StartSessionAsync(
+            new StartSessionRequest(request.CartId, UserId: request.UserId), cancellationToken);
         return Ok(session);
     }
 
@@ -79,25 +80,21 @@ public class CartController(ICartService cartService, ISessionService sessionSer
 
     // GET: api/cart/active/{cartId}
     [HttpGet("active/{cartId}")]
-    public async Task<ActionResult<CartSessionResponseDto>> GetActiveSession(
+    public async Task<ActionResult<CartSummaryResponse>> GetActiveSession(
         string cartId,
         CancellationToken cancellationToken)
     {
-        var session = await cartService.GetActiveSessionByCartIdAsync(cartId, cancellationToken);
-        if (session == null) return NotFound(new { message = $"No active shopping session on cart '{cartId}'" });
-
+        var session = await sessionService.GetActiveSessionByCartIdAsync(cartId, cancellationToken);
         return Ok(session);
     }
 
     // GET: api/cart/{sessionId}
     [HttpGet("{sessionId:guid}")]
-    public async Task<ActionResult<CartSessionResponseDto>> GetSession(
+    public async Task<ActionResult<CartSummaryResponse>> GetSession(
         Guid sessionId,
         CancellationToken cancellationToken)
     {
-        var session = await cartService.GetSessionByIdAsync(sessionId, cancellationToken);
-        if (session == null) return NotFound(new { message = "Session not found" });
-
+        var session = await sessionService.GetSessionSummaryAsync(sessionId, cancellationToken);
         return Ok(session);
     }
 }

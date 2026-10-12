@@ -10,27 +10,8 @@ public record LegacyStartSessionRequest(
 public record CartAddItemRequest(
     string Barcode,
     int MeasuredWeightG,
-    DetectionSource Source = DetectionSource.Scanner
-);
-
-public record LegacySessionItemDto(
-    Guid Id,
-    Guid VariantId,
-    string ProductName,
-    string Barcode,
-    int UnitPriceMinor,
-    int ExpectedWeightG,
-    int Quantity,
-    DateTime AddedAt
-);
-
-public record CartSessionResponseDto(
-    Guid SessionId,
-    string CartId,
-    SessionStatus Status,
-    int TotalMinor,
-    DateTime StartedAt,
-    List<LegacySessionItemDto> Items
+    DetectionSource Source = DetectionSource.Scanner,
+    Guid? EventId = null
 );
 
 public record CartItemProcessResult(
@@ -39,7 +20,7 @@ public record CartItemProcessResult(
     bool IsWeightMismatch = false,
     int? ExpectedWeightG = null,
     int? MeasuredWeightG = null,
-    CartSessionResponseDto? Session = null
+    CartSummaryResponse? Session = null
 );
 
 public record CheckoutResponseDto(

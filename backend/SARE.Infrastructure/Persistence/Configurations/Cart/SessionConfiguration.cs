@@ -44,6 +44,11 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(session => session.CartId);
+        // Closed sessions remain in history; only an open session occupies the cart.
+        builder.HasIndex(session => session.CartId, "ux_sessions_open_cart")
+            .IsUnique()
+            .HasDatabaseName("ux_sessions_open_cart")
+            .HasFilter("status = 'open'");
         builder.HasIndex(session => session.UserId);
         builder.HasIndex(session => session.Status);
 

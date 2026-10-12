@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SARE.Api.Authorization;
 using SARE.Application.Common.Interfaces;
 using SARE.Application.DTOs.Cart;
 
@@ -8,6 +10,14 @@ namespace SARE.Api.Controllers;
 [Route("api")]
 public class SessionController(ISessionService sessionService) : ControllerBase
 {
+    // GET /api/sessions: initial state and reconnect synchronization for admins.
+    [HttpGet("sessions")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public async Task<ActionResult<IReadOnlyList<CartSummaryResponse>>> GetSessions(CancellationToken ct)
+    {
+        return Ok(await sessionService.GetSessionsAsync(ct));
+    }
+
     // POST /api/sessions
     [HttpPost("sessions")]
     public async Task<IActionResult> StartSession(

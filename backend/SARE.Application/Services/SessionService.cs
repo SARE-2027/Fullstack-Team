@@ -20,6 +20,11 @@ public class SessionService(
     IValidator<CloseSessionRequest>? closeValidator = null,
     IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null) : ISessionService
 {
+    public Task<IReadOnlyList<CartSummaryResponse>> GetSessionsAsync(CancellationToken ct = default)
+    {
+        return sessions.GetAllSummariesAsync(ct);
+    }
+
     public async Task<CartTelemetryResponse> UpdateCartTelemetryAsync(
         string cartId,
         UpdateCartTelemetryRequest request,
@@ -157,19 +162,9 @@ public class SessionService(
         await sessions.AddAsync(session, ct);
 
         // 5. إرجاع ملخص الجلسة وإشعار شاشة العربة
-        var summary = new CartSummaryResponse(
-            SessionId: session.Id,
-            CartId: session.CartId,
-            UserId: user?.Id,
-            UserName: user?.Name,
-            Status: session.Status.ToString().ToLowerInvariant(),
-            TotalMinor: session.TotalMinor,
-            ItemsCount: 0,
-            StartedAt: session.StartedAt,
-            Items: []
-        );
+        var summary = await GetSessionSummaryAsync(session.Id, ct);
 
-        await cartNotifications.NotifySessionStartedAsync(cart.Id, summary, ct);
+        await cartNotifications.NotifySessionUpdatedAsync(summary, ct);
 
         return summary;
     }
@@ -178,28 +173,8 @@ public class SessionService(
         Guid sessionId,
         CancellationToken ct = default)
     {
-        var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
-        if (session is null)
-            throw new NotFoundException("Session", sessionId);
-
-        string? userName = null;
-        if (session.UserId.HasValue)
-        {
-            var user = await users.GetByIdAsync(session.UserId.Value, ct);
-            userName = user?.Name;
-        }
-
-        return new CartSummaryResponse(
-            SessionId: session.Id,
-            CartId: session.CartId,
-            UserId: session.UserId,
-            UserName: userName,
-            Status: session.Status.ToString().ToLowerInvariant(),
-            TotalMinor: session.TotalMinor,
-            ItemsCount: items.Count,
-            StartedAt: session.StartedAt,
-            Items: items
-        );
+        return await sessions.GetSummaryAsync(sessionId, ct)
+            ?? throw new NotFoundException("Session", sessionId);
     }
 
     public async Task<CartSummaryResponse> GetActiveSessionByCartIdAsync(
@@ -209,28 +184,8 @@ public class SessionService(
         var cart = await carts.GetByIdAsync(cartId, ct)
             ?? throw new NotFoundException("Cart", cartId);
 
-        var (session, items) = await sessions.GetActiveWithItemsByCartIdAsync(cartId, ct);
-        if (session is null)
-            throw new NotFoundException($"لا توجد جلسة نشطة للعربة {cartId} حالياً");
-
-        string? userName = null;
-        if (session.UserId.HasValue)
-        {
-            var user = await users.GetByIdAsync(session.UserId.Value, ct);
-            userName = user?.Name;
-        }
-
-        return new CartSummaryResponse(
-            SessionId: session.Id,
-            CartId: session.CartId,
-            UserId: session.UserId,
-            UserName: userName,
-            Status: session.Status.ToString().ToLowerInvariant(),
-            TotalMinor: session.TotalMinor,
-            ItemsCount: items.Count,
-            StartedAt: session.StartedAt,
-            Items: items
-        );
+        return await sessions.GetActiveSummaryByCartIdAsync(cartId, ct)
+            ?? throw new NotFoundException($"لا توجد جلسة نشطة للعربة {cartId} حالياً");
     }
 
     public async Task<CartSummaryResponse> CloseSessionAsync(
@@ -245,8 +200,8 @@ public class SessionService(
                 throw new ValidationException(valResult.Errors);
         }
 
-        // 1. جلب الجلسة مع أصنافها
-        var (session, items) = await sessions.GetWithItemsAsync(sessionId, ct);
+        // 1. جلب الجلسة للتعديل؛ الإجمالي يُحسب من أسعار أصنافها المحفوظة
+        var session = await sessions.GetByIdAsync(sessionId, ct);
         if (session is null)
             throw new NotFoundException("Session", sessionId);
 
@@ -274,7 +229,7 @@ public class SessionService(
         session.CloseReason = request?.Reason ?? (request?.ClosedByUserId.HasValue == true ? CloseReason.StaffClosed : null);
 
         // إعادة احتساب إجمالي الفاتورة المالي الفعلي من واقع أصناف السلة النشطة لضمان النزاهة المالية
-        session.TotalMinor = items.Sum(i => i.UnitPriceMinor);
+        session.TotalMinor = await sessions.GetActiveItemsTotalAsync(sessionId, ct);
 
         // بعد انتهاء جلسة المتسوق بنجاح: إذا كانت البطارية منخفضة جداً، تُعطل العربة الآن لمنع أي متسوق تالٍ من أخذها
         var cart = await carts.GetByIdAsync(session.CartId, ct);
@@ -292,28 +247,10 @@ public class SessionService(
             }
         }, ct);
 
-        // 5. جلب اسم المتسوق للعرض في الفاتورة
-        string? userName = null;
-        if (session.UserId.HasValue)
-        {
-            var user = await users.GetByIdAsync(session.UserId.Value, ct);
-            userName = user?.Name;
-        }
+        // Read and publish the committed state after the whole transaction succeeds.
+        var summary = await GetSessionSummaryAsync(session.Id, ct);
 
-        // 6. إرجاع ملخص الفاتورة المغلقة وإشعار شاشة العربة
-        var summary = new CartSummaryResponse(
-            SessionId: session.Id,
-            CartId: session.CartId,
-            UserId: session.UserId,
-            UserName: userName,
-            Status: session.Status.ToString().ToLowerInvariant(),
-            TotalMinor: session.TotalMinor,
-            ItemsCount: items.Count,
-            StartedAt: session.StartedAt,
-            Items: items
-        );
-
-        await cartNotifications.NotifySessionClosedAsync(session.CartId, summary, ct);
+        await cartNotifications.NotifySessionUpdatedAsync(summary, ct);
 
         return summary;
     }

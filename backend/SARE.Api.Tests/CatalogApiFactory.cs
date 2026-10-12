@@ -31,6 +31,8 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     public bool SimulateProductCategoryRace { get; set; }
     public bool SimulateCatalogWriteRace { get; set; }
     public bool SimulateSessionWriteRace { get; set; }
+    public bool SimulateSessionStartRace { get; set; }
+    public bool SimulateDetectionRace { get; set; }
     public bool UseApplicationJwt { get; init; }
     public string ImageRoot { get; } = Path.Combine(Path.GetTempPath(), "sare-image-tests", Guid.NewGuid().ToString("N"));
 
@@ -103,6 +105,56 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
+            var newSession = eventData.Context!.ChangeTracker.Entries<SARE.Domain.Cart.Session>()
+                .FirstOrDefault(entry => entry.State == EntityState.Added);
+            if (factory.SimulateSessionStartRace && newSession is not null)
+            {
+                factory.SimulateSessionStartRace = false;
+                // Commit a competing start after the service check, before this insert.
+                await factory.InDatabaseAsync(async db =>
+                {
+                    db.Sessions.Add(new SARE.Domain.Cart.Session
+                    {
+                        Id = Guid.NewGuid(), CartId = newSession.Entity.CartId,
+                        StartedAt = DateTime.UtcNow, LastActivityAt = DateTime.UtcNow
+                    });
+                    await db.SaveChangesAsync(cancellationToken);
+                });
+            }
+
+            var newDetection = eventData.Context.ChangeTracker.Entries<SARE.Domain.Cart.DetectionEvent>()
+                .FirstOrDefault(entry => entry.State == EntityState.Added);
+            if (factory.SimulateDetectionRace && newDetection is not null)
+            {
+                factory.SimulateDetectionRace = false;
+                // A retry wins with the same event ID while this invocation still holds stale state.
+                await factory.InDatabaseAsync(async db =>
+                {
+                    var detection = newDetection.Entity;
+                    var item = eventData.Context.ChangeTracker.Entries<SARE.Domain.Cart.SessionItem>()
+                        .SingleOrDefault(entry => entry.State == EntityState.Added)?.Entity;
+                    if (item is not null)
+                    {
+                        db.SessionItems.Add(new SARE.Domain.Cart.SessionItem
+                        {
+                            Id = item.Id, SessionId = item.SessionId, VariantId = item.VariantId,
+                            UnitPriceMinor = item.UnitPriceMinor, Source = item.Source, AddedAt = item.AddedAt
+                        });
+                        var session = await db.Sessions.SingleAsync(row => row.Id == item.SessionId, cancellationToken);
+                        session.TotalMinor += item.UnitPriceMinor;
+                        session.LastActivityAt = DateTime.UtcNow.AddTicks(1);
+                    }
+                    db.DetectionEvents.Add(new SARE.Domain.Cart.DetectionEvent
+                    {
+                        Id = detection.Id, SessionId = detection.SessionId, SessionItemId = detection.SessionItemId,
+                        Source = detection.Source, DetectedBarcode = detection.DetectedBarcode,
+                        WeightDeltaG = detection.WeightDeltaG, Outcome = detection.Outcome,
+                        FinalBarcode = detection.FinalBarcode, CreatedAt = detection.CreatedAt
+                    });
+                    await db.SaveChangesAsync(cancellationToken);
+                });
+            }
+
             var changedProduct = eventData.Context!.ChangeTracker.Entries<Product>()
                 .FirstOrDefault(entry => entry.State == EntityState.Modified);
             if (factory.SimulateCatalogWriteRace && changedProduct is not null)

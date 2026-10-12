@@ -343,6 +343,11 @@ namespace SARE.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_sessions_user_id");
 
+                    b.HasIndex(new[] { "CartId" }, "ux_sessions_open_cart")
+                        .IsUnique()
+                        .HasDatabaseName("ux_sessions_open_cart")
+                        .HasFilter("status = 'open'");
+
                     b.ToTable("sessions", null, t =>
                         {
                             t.HasCheckConstraint("ck_sessions_close_reason", "close_reason IS NULL OR close_reason IN ('staff_closed', 'abandoned')");

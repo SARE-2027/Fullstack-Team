@@ -7,7 +7,8 @@ using SARE.Domain.Catalog;
 namespace SARE.Application.Services;
 
 public sealed class ProductOptionService(IProductOptionRepository repository, ProductService products,
-    IValidator<ProductOptionRequest> optionValidator, IValidator<ProductOptionValueRequest> valueValidator, TimeProvider clock)
+    IValidator<ProductOptionRequest> optionValidator, IValidator<ProductOptionValueRequest> valueValidator,
+    IValidator<CreateProductOptionWithValuesRequest> optionWithValuesValidator, TimeProvider clock)
 {
     public async Task<IReadOnlyList<ProductOptionResponse>> GetOptionsAsync(Guid productId, CancellationToken ct)
     {
@@ -56,6 +57,52 @@ public sealed class ProductOptionService(IProductOptionRepository repository, Pr
         Touch(product);
         await repository.SaveAsync(ct);
         return new(option.Id, option.NameAr, option.NameEn, []);
+    }
+
+    public async Task<ProductOptionResponse> CreateOptionWithValuesAsync(
+        Guid productId,
+        CreateProductOptionWithValuesRequest request,
+        CancellationToken ct)
+    {
+        request = request with
+        {
+            NameAr = request.NameAr?.Trim(),
+            NameEn = request.NameEn?.Trim(),
+            Values = request.Values?.Select(value => value is null ? null! : value with
+            {
+                ValueAr = value.ValueAr?.Trim(),
+                ValueEn = value.ValueEn?.Trim()
+            }).ToList()
+        };
+        await optionWithValuesValidator.ValidateAndThrowAsync(request, ct);
+
+        var product = await RequireProductAsync(productId, ct);
+        var option = new ProductOption
+        {
+            Id = Guid.NewGuid(),
+            ProductId = productId,
+            NameAr = request.NameAr!,
+            NameEn = request.NameEn!
+        };
+        var values = request.Values!.Select(value => new ProductOptionValue
+        {
+            Id = Guid.NewGuid(),
+            ProductOptionId = option.Id,
+            ValueAr = value.ValueAr!,
+            ValueEn = value.ValueEn!
+        }).ToList();
+
+        repository.Add(option);
+        foreach (var value in values)
+        {
+            repository.Add(value);
+        }
+        Touch(product);
+
+        // One save commits the option, all values, and the parent timestamp atomically.
+        await repository.SaveAsync(ct);
+        return new ProductOptionResponse(option.Id, option.NameAr, option.NameEn,
+            values.Select(Map).ToList());
     }
 
     public async Task<ProductOptionResponse> UpdateOptionAsync(Guid productId, Guid optionId, ProductOptionRequest request, CancellationToken ct)

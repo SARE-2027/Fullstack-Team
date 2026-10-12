@@ -3,36 +3,157 @@ using SARE.Application.Common.Interfaces;
 using SARE.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using SARE.Api.Authorization;
+using SARE.Domain.Users;
+using SARE.Application.DTOs.Cart;
+using SARE.Application.Common.Exceptions;
+using Microsoft.EntityFrameworkCore;
 
 namespace SARE.Api.Hubs;
 
-public class CartHub(ICartRepository carts) : Hub
+public class CartHub(
+    ICartRepository carts,
+    ISessionRepository sessions,
+    ISessionService sessionService,
+    ICartService cartService) : Hub
 {
-    public async Task JoinCartGroup(string cartId, string? hardwareToken = null)
+    private const string CartConnectionKey = "AuthenticatedCart";
+    private sealed record CartConnection(string CartId, string HardwareToken);
+    public const string SessionAdminsGroup = "SessionAdmins";
+
+    public static string SessionCartGroup(string cartId) => $"session_cart_{cartId}";
+
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public Task JoinSessionsGroup()
     {
+        return Groups.AddToGroupAsync(Context.ConnectionId, SessionAdminsGroup);
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public Task LeaveSessionsGroup()
+    {
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, SessionAdminsGroup);
+    }
+
+    public async Task<CartSummaryResponse?> JoinCartGroup(string cartId, string? hardwareToken = null)
+    {
+        if (string.IsNullOrWhiteSpace(cartId) || cartId.Length > 32)
+            throw new HubException("INVALID_CART_ID: CartId is required and must not exceed 32 characters.");
+
         var cart = await carts.GetByIdAsync(cartId);
         if (cart is null)
         {
             throw new HubException($"العربة {cartId} غير مسجلة في النظام");
         }
 
-        // إذا كانت العربة تمتلك رمز تحقق، نتحقق من صحة الرمز قبل السماح بالاستماع لبياناتها
-        if (!string.IsNullOrWhiteSpace(cart.TokenHash))
+        // Cart subscriptions require a provisioned hardware token, including for anonymous device clients.
+        if (string.IsNullOrWhiteSpace(cart.TokenHash) || string.IsNullOrWhiteSpace(hardwareToken)
+            || !TokenHasher.VerifyToken(hardwareToken, cart.TokenHash))
         {
-            if (string.IsNullOrWhiteSpace(hardwareToken) || !TokenHasher.VerifyToken(hardwareToken, cart.TokenHash))
-            {
-                throw new HubException("رمز مصادقة العربة غير صالح للاتصال بالقناة");
-            }
+            throw new HubException("رمز مصادقة العربة غير صالح للاتصال بالقناة");
         }
+
+        if (Context.Items.TryGetValue(CartConnectionKey, out var previous) && previous is CartConnection connection)
+            await LeaveCartGroup(connection.CartId);
 
         await Groups.AddToGroupAsync(Context.ConnectionId, $"cart_{cartId}");
         await Groups.AddToGroupAsync(Context.ConnectionId, $"Cart_{cartId}");
+        // Admins receive SessionUpdated through JoinSessionsGroup, avoiding overlapping recipients.
+        if (Context.User?.IsInRole(UserRoles.Admin) != true)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, SessionCartGroup(cartId));
+        }
+
+        // Context.Items survives hub method calls; hub instances themselves are transient.
+        Context.Items[CartConnectionKey] = new CartConnection(cartId, hardwareToken);
+        // Subscribe first, then read, so a change during synchronization is also delivered.
+        return await sessions.GetActiveSummaryByCartIdAsync(cartId, Context.ConnectionAborted);
     }
 
     public async Task LeaveCartGroup(string cartId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"cart_{cartId}");
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"Cart_{cartId}");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, SessionCartGroup(cartId));
+        if (Context.Items.TryGetValue(CartConnectionKey, out var value)
+            && value is CartConnection connection && connection.CartId == cartId)
+        {
+            Context.Items.Remove(CartConnectionKey);
+        }
+    }
+
+    public Task<CartSummaryResponse> StartSession(CartStartSessionRequest request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        return await sessionService.StartSessionAsync(
+            new StartSessionRequest(connection.CartId, request.NfcUid), Context.ConnectionAborted);
+    });
+
+    public Task<CartItemProcessResult> ProcessItemDetection(Guid sessionId, CartAddItemRequest request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        if (request?.EventId is null || request.EventId == Guid.Empty)
+            throw new HubException("VALIDATION_FAILED: A stable, non-empty eventId is required.");
+
+        return await cartService.ProcessItemDetectionAsync(sessionId, request, Context.ConnectionAborted);
+    });
+
+    public Task<CartTelemetryResponse> UpdateCartTelemetry(UpdateCartTelemetryRequest request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        return await sessionService.UpdateCartTelemetryAsync(
+            connection.CartId, request, connection.HardwareToken, Context.ConnectionAborted);
+    });
+
+    public Task<CartSummaryResponse> CloseSession(Guid sessionId) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        // A device closes its session without impersonating an administrative user.
+        return await sessionService.CloseSessionAsync(sessionId, ct: Context.ConnectionAborted);
+    });
+
+    private async Task<CartConnection> RequireCartAsync()
+    {
+        if (!Context.Items.TryGetValue(CartConnectionKey, out var value) || value is not CartConnection connection)
+            throw new HubException("CART_NOT_JOINED: Call JoinCartGroup before sending cart commands.");
+
+        var cart = await carts.GetByIdAsync(connection.CartId, Context.ConnectionAborted);
+        if (cart is null || string.IsNullOrWhiteSpace(cart.TokenHash)
+            || !TokenHasher.VerifyToken(connection.HardwareToken, cart.TokenHash))
+        {
+            throw new HubException("INVALID_CART_TOKEN: Cart credentials are no longer valid.");
+        }
+        return connection;
+    }
+
+    private async Task RequireCartSessionAsync(string cartId, Guid sessionId)
+    {
+        var session = await sessions.GetByIdAsync(sessionId, Context.ConnectionAborted);
+        if (session is null || session.CartId != cartId)
+            throw new HubException("SESSION_NOT_ACCESSIBLE: Session does not belong to this cart.");
+    }
+
+    private static async Task<T> ExecuteAsync<T>(Func<Task<T>> command)
+    {
+        try
+        {
+            return await command();
+        }
+        catch (AppException exception)
+        {
+            throw new HubException($"{exception.ErrorCode}: {exception.Message}");
+        }
+        catch (FluentValidation.ValidationException exception)
+        {
+            throw new HubException($"VALIDATION_FAILED: {string.Join("; ", exception.Errors.Select(error => error.ErrorMessage))}");
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new HubException("CONFLICT: Session changed concurrently. Synchronize and retry with the same eventId.");
+        }
     }
 
     [Authorize(Policy = AuthorizationPolicies.CatalogRead)]

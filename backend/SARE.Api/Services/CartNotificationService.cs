@@ -10,11 +10,19 @@ public class CartNotificationService(
     IHubContext<CartHub> hubContext,
     ILogger<CartNotificationService> logger) : ICartNotificationService
 {
-    public Task NotifySessionStartedAsync(string cartId, Guid sessionId) =>
-        SendAsync($"cart_{cartId}", "SessionStarted", new { cartId, sessionId, timestamp = DateTime.UtcNow });
-
-    public Task NotifyCartUpdatedAsync(string cartId, Guid sessionId, int totalMinor, int itemCount, string latestItemName) =>
-        SendAsync($"cart_{cartId}", "CartUpdated", new { cartId, sessionId, totalMinor, itemCount, latestItemName, timestamp = DateTime.UtcNow });
+    public async Task NotifySessionUpdatedAsync(CartSummaryResponse session, CancellationToken ct = default)
+    {
+        try
+        {
+            // Admin and cart session groups have separate membership to avoid duplicate updates.
+            await hubContext.Clients.Groups([CartHub.SessionAdminsGroup, CartHub.SessionCartGroup(session.CartId)])
+                .SendAsync("SessionUpdated", session, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "SessionUpdated notification failed for session {SessionId} after saving.", session.SessionId);
+        }
+    }
 
     public async Task NotifyFraudAlertAsync(string cartId, Guid sessionId, string barcode, int weightDiffG, string message)
     {
@@ -26,33 +34,15 @@ public class CartNotificationService(
     public Task NotifyCheckoutSuccessAsync(string cartId, Guid sessionId, int totalPaidMinor, string receiptHash) =>
         SendAsync($"cart_{cartId}", "CheckoutSuccess", new { cartId, sessionId, totalPaidMinor, receiptHash, timestamp = DateTime.UtcNow });
 
-    private async Task SendAsync(string group, string eventName, object payload)
-    {
-        try { await hubContext.Clients.Group(group).SendAsync(eventName, payload); }
-        catch (Exception ex) { logger.LogWarning(ex, "SignalR notification {EventName} failed for {Group} after saving.", eventName, group); }
-    }
-
-    public async Task NotifySessionStartedAsync(string cartId, CartSummaryResponse session, CancellationToken ct = default)
+    private async Task SendAsync(string group, string eventName, object payload, CancellationToken ct = default)
     {
         try
         {
-            await hubContext.Clients.Group($"cart_{cartId}").SendAsync("SessionStarted", session, ct);
+            await hubContext.Clients.Group(group).SendAsync(eventName, payload, ct);
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "تعذر إرسال إشعار بدء الجلسة لحظياً للعربة {CartId} عبر SignalR. العملية مستمرة بنجاح في قاعدة البيانات.", cartId);
-        }
-    }
-
-    public async Task NotifySessionClosedAsync(string cartId, CartSummaryResponse session, CancellationToken ct = default)
-    {
-        try
-        {
-            await hubContext.Clients.Group($"cart_{cartId}").SendAsync("SessionClosed", session, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "تعذر إرسال إشعار إغلاق الجلسة لحظياً للعربة {CartId} عبر SignalR. العملية مستمرة بنجاح في قاعدة البيانات.", cartId);
+            logger.LogWarning(ex, "SignalR notification {EventName} failed for {Group} after saving.", eventName, group);
         }
     }
 

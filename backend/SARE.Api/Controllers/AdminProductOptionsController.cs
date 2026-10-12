@@ -21,6 +21,16 @@ public sealed class AdminProductOptionsController(ProductOptionService service) 
         var option = await service.CreateOptionAsync(productId, request, ct);
         return CreatedAtAction(nameof(GetOption), new { productId, optionId = option.Id }, option);
     }
+    [HttpPost("with-values")]
+    public async Task<ActionResult<ProductOptionResponse>> CreateOptionWithValues(
+        Guid productId,
+        CreateProductOptionWithValuesRequest request,
+        CancellationToken ct)
+    {
+        var option = await service.CreateOptionWithValuesAsync(productId, request, ct);
+        return CreatedAtAction(nameof(GetOption), new { productId, optionId = option.Id }, option);
+    }
+
     [HttpPut("{optionId:guid}")]
     public async Task<ActionResult<ProductOptionResponse>> UpdateOption(Guid productId, Guid optionId, ProductOptionRequest request, CancellationToken ct) => Ok(await service.UpdateOptionAsync(productId, optionId, request, ct));
     [HttpDelete("{optionId:guid}")]

@@ -29,6 +29,79 @@ public sealed class ProductOptionsEndpointsTests : IAsyncLifetime
     public async Task DisposeAsync() { _client.Dispose(); await _factory.DisposeAsync(); }
 
     [Fact]
+    public async Task OptionWithValuesIsCreatedTogetherAndItsValuesCanBeSelectedImmediately()
+    {
+        var request = new CreateProductOptionWithValuesRequest(" اللون ", " Color ",
+        [
+            new ProductOptionValueRequest(" أحمر ", " Red "),
+            new ProductOptionValueRequest(" أزرق ", " Blue ")
+        ]);
+
+        var response = await _client.PostAsJsonAsync($"{Route}/with-values", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var option = (await response.Content.ReadFromJsonAsync<ProductOptionResponse>())!;
+        Assert.Equal("Color", option.NameEn);
+        Assert.Equal("اللون", option.NameAr);
+        Assert.Equal(2, option.Values.Count);
+        Assert.All(option.Values, value => Assert.NotEqual(Guid.Empty, value.Id));
+        Assert.Equal("Red", option.Values[0].ValueEn);
+        Assert.Equal("أحمر", option.Values[0].ValueAr);
+        Assert.Equal($"{Route}/{option.Id}", response.Headers.Location!.AbsolutePath);
+        var saved = (await _client.GetFromJsonAsync<ProductOptionResponse>(response.Headers.Location))!;
+        Assert.Equal(option.Values.Select(value => value.Id).Order(), saved.Values.Select(value => value.Id).Order());
+
+        var variantResponse = await _client.PostAsJsonAsync($"/api/v1/admin/products/{_productId}/variants",
+            new VariantRequest("WITH-VALUES", 100, 50, true, [option.Values[0].Id]));
+        Assert.Equal(HttpStatusCode.Created, variantResponse.StatusCode);
+        var variant = (await variantResponse.Content.ReadFromJsonAsync<ProductVariantResponse>())!;
+        Assert.Equal(option.Values[0].Id, Assert.Single(variant.Options).SelectedValueId);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("empty")]
+    [InlineData("null-entry")]
+    [InlineData("invalid-value")]
+    [InlineData("invalid-name")]
+    public async Task InvalidCombinedRequestNeverCreatesAnOptionOrPartialValues(string invalidPart)
+    {
+        IReadOnlyList<ProductOptionValueRequest>? values = invalidPart switch
+        {
+            "missing" => null,
+            "empty" => [],
+            "null-entry" => [new("أحمر", "Red"), null!],
+            "invalid-value" => [new("أحمر", "Red"), new("أزرق", " ")],
+            _ => [new("أحمر", "Red")]
+        };
+        var request = new CreateProductOptionWithValuesRequest(
+            "اللون", invalidPart == "invalid-name" ? " " : "Color", values);
+
+        var response = await _client.PostAsJsonAsync($"{Route}/with-values", request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await _factory.InDatabaseAsync(async db =>
+        {
+            Assert.Empty(await db.ProductOptions.ToListAsync());
+            Assert.Empty(await db.ProductOptionValues.ToListAsync());
+        });
+    }
+
+    [Fact]
+    public async Task CombinedCreateRollsBackOnParentWriteConflictAndRejectsMissingProduct()
+    {
+        var request = new CreateProductOptionWithValuesRequest("اللون", "Color", [new("أحمر", "Red")]);
+        _factory.SimulateCatalogWriteRace = true;
+        Assert.Equal(HttpStatusCode.Conflict,
+            (await _client.PostAsJsonAsync($"{Route}/with-values", request)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await _client.PostAsJsonAsync($"/api/v1/admin/products/{Guid.NewGuid()}/options/with-values", request)).StatusCode);
+        await _factory.InDatabaseAsync(async db =>
+        {
+            Assert.Empty(await db.ProductOptions.ToListAsync());
+            Assert.Empty(await db.ProductOptionValues.ToListAsync());
+        });
+    }
+
+    [Fact]
     public async Task OptionsAndValuesSupportFullLifecycleAndLocations()
     {
         var create = await _client.PostAsJsonAsync(Route, new ProductOptionRequest(" الحجم ", " Size "));
@@ -102,7 +175,7 @@ public sealed class ProductOptionsEndpointsTests : IAsyncLifetime
     {
         SetRole(role);
         var optionId = Guid.NewGuid(); var valueId = Guid.NewGuid();
-        var options = new[] { ("GET", Route), ("GET", $"{Route}/{optionId}"), ("POST", Route), ("PUT", $"{Route}/{optionId}"), ("DELETE", $"{Route}/{optionId}") };
+        var options = new[] { ("GET", Route), ("GET", $"{Route}/{optionId}"), ("POST", Route), ("POST", $"{Route}/with-values"), ("PUT", $"{Route}/{optionId}"), ("DELETE", $"{Route}/{optionId}") };
         var values = new[] { ("GET", $"{Route}/{optionId}/values"), ("GET", $"{Route}/{optionId}/values/{valueId}"), ("POST", $"{Route}/{optionId}/values"), ("PUT", $"{Route}/{optionId}/values/{valueId}"), ("DELETE", $"{Route}/{optionId}/values/{valueId}") };
         foreach (var (method, path) in options.Concat(values))
         {
