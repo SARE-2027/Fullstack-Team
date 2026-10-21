@@ -196,7 +196,8 @@ public sealed class ProductsEndpointsTests : IAsyncLifetime
             context.SessionItems.Add(new SessionItem
             {
                 Id = Guid.NewGuid(), SessionId = session.Id, VariantId = variantId,
-                UnitPriceMinor = 650, Source = DetectionSource.Scanner
+                Barcode = (await context.ProductVariants.SingleAsync(variant => variant.Id == variantId)).Barcode,
+                UnitPriceMinor = 650, Source = CartItemSource.Scanner
             });
             await context.SaveChangesAsync();
         });

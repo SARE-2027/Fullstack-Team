@@ -22,7 +22,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? 
     public DbSet<CartEntity> Carts => Set<CartEntity>();
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<SessionItem> SessionItems => Set<SessionItem>();
-    public DbSet<DetectionEvent> DetectionEvents => Set<DetectionEvent>();
+    public DbSet<CartMovementItem> CartMovementItems => Set<CartMovementItem>();
+    public DbSet<CartMovement> CartMovements => Set<CartMovement>();
+    public DbSet<CartEventReceipt> CartEventReceipts => Set<CartEventReceipt>();
     public DbSet<ShelfEvent> ShelfEvents => Set<ShelfEvent>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
@@ -80,8 +82,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? 
                 case SessionItem item when entry.State == EntityState.Added && item.AddedAt == default:
                     item.AddedAt = now;
                     break;
-                case DetectionEvent detection when entry.State == EntityState.Added && detection.CreatedAt == default:
-                    detection.CreatedAt = now;
+                case CartMovementItem observation when entry.State == EntityState.Added && observation.CreatedAt == default:
+                    observation.CreatedAt = now;
                     break;
                 case ShelfEvent shelf when entry.State == EntityState.Added && shelf.CreatedAt == default:
                     shelf.CreatedAt = now;

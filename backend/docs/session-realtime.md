@@ -1,5 +1,9 @@
 # Session HTTP reads and live updates
 
+See [cart-movements.md](cart-movements.md) for the current movement-based contract,
+confirmed basket presence, pending item evidence and scanner/physical reconciliation.
+HTTP individual-session routes require a device token or permitted Admin/Staff JWT.
+
 ## Load the initial state
 
 `GET /api/sessions` requires an **Admin** JWT. It returns an array of all sessions
@@ -11,27 +15,30 @@ database query; there is no query per session or per item.
 `GET /api/sessions/{sessionId}`, `GET /api/cart/{sessionId}`,
 `GET /api/carts/{cartId}/session`, and `GET /api/cart/active/{cartId}` all return
 the same `CartSummaryResponse` for an individual session. Both HTTP start routes
-and the hub start/close/join methods also use that session contract. Detection
+and the hub start/close/join methods also use that session contract. Movement
 acknowledgements keep their operation-result envelope, with the same full DTO
-in `session` when present. Their existing access rules are unchanged; the
-all-sessions endpoint is admin-only.
+in `session` when present. Device credentials permit access to that cart only;
+Admin JWTs permit management, Staff JWTs permit individual reads. The all-sessions
+endpoint is admin-only. Ordinary customer ownership/history is separate work.
 
 Each session contains:
 
 - `sessionId`, `cartId`, `userId`, `userName`, and `status`.
 - `totalMinor`, `itemsCount`, `startedAt`, and `items`.
 - `updatedAt`, `version`, `closedAt`, `closedByUserId`, and `closeReason`.
+- `lastMovementSequence`, `basketWeightG`, `expectedBasketWeightG`, and `pendingMovements`.
 
 Each item contains its `id`, `variantId`, `productId`, `barcode`, Arabic and
 English product names (`nameAr`, `nameEn`), nullable `imageUrl`, `unitPriceMinor`,
-`expectedWeightG`, `source`, and `addedAt`. `source` uses the numeric detection
+`expectedWeightG`, `source`, and `addedAt`. `source` uses the numeric CartItemSource
 enum: Vision = 0, Scanner = 1, Manual = 2. Removed items are excluded. Each row
 represents one added unit, matching the existing invoice model. The unit price
 comes from the session item, preserving the price recorded when it was added.
-The barcode, names, image and expected weight come from the current catalog;
-expected weight is not a historical snapshot. Full product options and other
-variants are not nested into the invoice items. These fields use existing
-columns and do not require a database migration.
+Barcode, price and expected weight are now captured when adding a unit. Historical
+rows may have null expected weight and fall back to today's barcode for display.
+Names and images still come from the catalog. Full options/other variants are not
+nested into invoice items. `basketPresence`, `removalRequestedAt`, movement counters
+and full pending movement details are included; these fields require the movement migration.
 
 The former `CartSessionResponseDto` and `LegacySessionItemDto` response contracts
 are removed. Clients of `/api/cart` must use string session statuses (`open`,
@@ -40,9 +47,9 @@ fields above. The former per-row `quantity` was always 1 and is no longer sent.
 The existing start request with `cartId` and optional `userId` is retained.
 Session reads that are not found use the application's standard not-found error.
 
-After a successful detection save, the service reads the full summary once,
+After a successful movement save, the service reads the full summary once,
 publishes that DTO through `SessionUpdated`, and returns it in the operation
-acknowledgement. Accepted detection retries return the same contract for the
+acknowledgement. Exact receipt retries return the same contract for the
 original session's current state without publishing another update. Closing
 recalculates the total from active items' stored prices in the database, without
 loading product display data for the calculation.
@@ -86,23 +93,24 @@ update. Group names for this routing are internal; clients use the hub methods.
 | --- | --- |
 | `POST /api/sessions` | Newly opened session with empty items. |
 | `POST /api/cart/session/start` | Same update through the existing start flow. |
-| `POST /api/cart/{sessionId}/items` | Entire session after adding the accepted item. |
+| `POST /api/cart/{sessionId}/movements` | Entire session after saving movement decisions. |
 | `POST /api/sessions/{sessionId}/close` | Entire closed or abandoned session. |
 | `POST /api/cart/{sessionId}/checkout` | Same closed-session update through the existing close flow. |
 | Hub `StartSession` | Newly opened session. |
-| Hub `ProcessItemDetection` | Entire session after a newly accepted detection. |
+| Hub `ReportCartMovement` | Entire session after every saved report, including pending evidence. Each report changes the invoice atomically. |
+| Hub `RemoveSessionItem`, `CancelItemRemoval` | Entire session after a change to removal intent. |
+| Hub `ReconcileCartBasket` | Entire session after Admin recovery. |
 | Hub `CloseSession` | Entire closed session. |
 
 The application service saves first, reads the committed session, then calls
 the notification service. Closing publishes only after the whole session/cart
 transaction commits. Validation failures and rolled-back writes publish no
-`SessionUpdated` event. Rejected detections keep their existing fraud/weight
-alerts; they do not change either the session or its items.
+`SessionUpdated` event. Uncertain movements are visible in pendingMovements; uncertainty alone
+does not accuse the customer of fraud.
 
-The current API has no session-item edit/delete or session-delete endpoints.
-Future operations on those records should publish through
-`NotifySessionUpdatedAsync` after their transaction succeeds. Direct SQL writes
-do not generate application notifications.
+Physical item entry/exit, scan cancellation and removal intent use the movement
+hub commands. No session-delete endpoint is provided. Direct SQL writes do not
+generate application notifications.
 
 ## Initial load and reconnection
 

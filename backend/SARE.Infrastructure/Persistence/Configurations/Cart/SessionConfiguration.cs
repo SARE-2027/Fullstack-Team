@@ -17,6 +17,8 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
             table.HasCheckConstraint("ck_sessions_close_reason", "close_reason IS NULL OR close_reason IN ('staff_closed', 'abandoned')");
             table.HasCheckConstraint("ck_sessions_total_minor", "total_minor >= 0");
             table.HasCheckConstraint("ck_sessions_closed_at", "closed_at IS NULL OR closed_at >= started_at");
+            table.HasCheckConstraint("ck_sessions_movement_sequence", "last_movement_sequence >= 0");
+            table.HasCheckConstraint("ck_sessions_basket_weight", "(basket_weight_g IS NULL OR basket_weight_g >= 0) AND (reconciled_basket_weight_g IS NULL OR reconciled_basket_weight_g >= 0)");
         });
 
         builder.Property(session => session.CartId).HasMaxLength(32);

@@ -11,7 +11,11 @@ public record SessionItemDto(
     string NameEn,
     string? ImageUrl,
     int UnitPriceMinor,
-    int ExpectedWeightG,
-    DetectionSource Source,
+    int? ExpectedWeightG,
+    CartItemSource Source,
     DateTime AddedAt
-);
+)
+{
+    public SARE.Domain.Enums.BasketPresence BasketPresence { get; init; }
+    public DateTime? RemovalRequestedAt { get; init; }
+}

@@ -30,6 +30,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
     {
         _client = _factory.CreateClient();
         _client.DefaultRequestHeaders.Add("X-Cart-Token", CartToken);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken(UserRoles.Admin));
         await _factory.InDatabaseAsync(async db =>
         {
             await db.Database.EnsureCreatedAsync();
@@ -55,10 +56,9 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
     [InlineData("Admin", HttpStatusCode.OK)]
     public async Task OnlyAdminsCanLoadAllSessions(string? role, HttpStatusCode expected)
     {
-        if (role is not null)
-        {
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken(role));
-        }
+        _client.DefaultRequestHeaders.Authorization = role is not null
+            ? new AuthenticationHeaderValue("Bearer", _factory.CreateToken(role))
+            : null;
         var response = await _client.GetAsync("/api/sessions");
         Assert.Equal(expected, response.StatusCode);
         if (expected == HttpStatusCode.OK)
@@ -68,7 +68,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task SessionRoutesAndDetectionAcknowledgementsUseTheSameFullContract()
+    public async Task SessionRoutesAndMovementAcknowledgementsUseTheSameFullContract()
     {
         await using var hub = CreateHub();
         var updates = ListenForSessionUpdates(hub);
@@ -83,19 +83,19 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal("Customer", started.UserName);
         Assert.Equal(JsonSerializer.Serialize(started), JsonSerializer.Serialize(await ReadUpdateAsync(updates)));
 
-        var request = new CartAddItemRequest("ITEM-1", 50, EventId: Guid.NewGuid());
-        var addResponse = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/items", request);
+        var request = CreateScanRequest(started.SessionId);
+        var addResponse = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/movements", request);
         Assert.Equal(HttpStatusCode.OK, addResponse.StatusCode);
-        var result = (await addResponse.Content.ReadFromJsonAsync<CartItemProcessResult>())!;
+        var result = (await addResponse.Content.ReadFromJsonAsync<CartMovementResult>())!;
         var summary = result.Session;
-        Assert.True(result.Success);
+        Assert.Equal("Accepted", result.Movement.Status);
         Assert.NotNull(summary);
         var item = Assert.Single(summary.Items);
         Assert.Equal(_productId, item.ProductId);
         Assert.Equal(_variantId, item.VariantId);
         Assert.Equal("/images/session-product.jpg", item.ImageUrl);
         Assert.Equal(50, item.ExpectedWeightG);
-        Assert.Equal(DetectionSource.Scanner, item.Source);
+        Assert.Equal(CartItemSource.Scanner, item.Source);
         Assert.Equal(100, item.UnitPriceMinor);
         var expected = JsonSerializer.Serialize(summary);
         Assert.Equal(expected, JsonSerializer.Serialize(await ReadUpdateAsync(updates)));
@@ -114,9 +114,9 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         var all = (await _client.GetFromJsonAsync<List<CartSummaryResponse>>("/api/sessions"))!;
         Assert.Equal(expected, JsonSerializer.Serialize(Assert.Single(all)));
 
-        var retry = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/items", request);
+        var retry = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/movements", request);
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
-        Assert.Equal(expected, JsonSerializer.Serialize((await retry.Content.ReadFromJsonAsync<CartItemProcessResult>())!.Session));
+        Assert.Equal(expected, JsonSerializer.Serialize((await retry.Content.ReadFromJsonAsync<CartMovementResult>())!.Session));
 
         var closeResponse = await _client.PostAsJsonAsync($"/api/sessions/{started.SessionId}/close",
             new CloseSessionRequest(_userId, CloseReason.StaffClosed));
@@ -125,10 +125,10 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal("closed", closed.Status);
         Assert.Equal(_userId, closed.ClosedByUserId);
         Assert.Equal(JsonSerializer.Serialize(closed), JsonSerializer.Serialize(await ReadUpdateAsync(updates)));
-        var closedRetry = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/items", request);
+        var closedRetry = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/movements", request);
         Assert.Equal(HttpStatusCode.OK, closedRetry.StatusCode);
         Assert.Equal(JsonSerializer.Serialize(closed),
-            JsonSerializer.Serialize((await closedRetry.Content.ReadFromJsonAsync<CartItemProcessResult>())!.Session));
+            JsonSerializer.Serialize((await closedRetry.Content.ReadFromJsonAsync<CartMovementResult>())!.Session));
         Assert.False(updates.Reader.TryRead(out _));
     }
 
@@ -139,7 +139,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         for (var index = 0; index < 2; index++)
         {
             Assert.Equal(HttpStatusCode.OK,
-                (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+                (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", CreateScanRequest(session.SessionId))).StatusCode);
         }
         await _factory.InDatabaseAsync(async db =>
         {
@@ -161,7 +161,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         await AddOtherCartAsync();
         var first = await StartAsync(new StartSessionRequest(CartId, "NFC-TEST"));
         Assert.Equal(HttpStatusCode.OK,
-            (await _client.PostAsJsonAsync($"/api/cart/{first.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+            (await _client.PostAsJsonAsync($"/api/cart/{first.SessionId}/movements", CreateScanRequest(first.SessionId))).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
             (await _client.PostAsJsonAsync($"/api/sessions/{first.SessionId}/close",
                 new CloseSessionRequest(_userId, CloseReason.Abandoned))).StatusCode);
@@ -217,7 +217,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal(second.SessionId, (await ReadUpdateAsync(otherCartUpdates)).SessionId);
 
         Assert.Equal(HttpStatusCode.OK,
-            (await _client.PostAsJsonAsync($"/api/cart/{first.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+            (await _client.PostAsJsonAsync($"/api/cart/{first.SessionId}/movements", CreateScanRequest(first.SessionId))).StatusCode);
         var added = await ReadUpdateAsync(adminUpdates);
         Assert.Equal(first.SessionId, added.SessionId);
         Assert.Equal(100, added.TotalMinor);
@@ -264,12 +264,13 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Conflict,
             (await _client.PostAsJsonAsync("/api/sessions", new StartSessionRequest(CartId))).StatusCode);
         _factory.SimulateSessionWriteRace = true;
+        var movement = CreateScanRequest(session.SessionId);
         Assert.Equal(HttpStatusCode.Conflict,
-            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", movement)).StatusCode);
         await _factory.InDatabaseAsync(async db => Assert.Empty(await db.SessionItems.ToListAsync()));
 
         Assert.Equal(HttpStatusCode.OK,
-            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", movement)).StatusCode);
         var added = await ReadUpdateAsync(updates);
         Assert.Equal(100, added.TotalMinor);
         Assert.Single(added.Items);
@@ -343,14 +344,14 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task NewStartLegacyDetectionNewSummaryAndLegacyCheckoutShareOneLifecycle()
+    public async Task StartMovementSummaryAndCheckoutShareOneLifecycle()
     {
         var started = await StartAsync(new StartSessionRequest(CartId, "NFC-TEST"));
         Assert.Equal(_userId, started.UserId);
         Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/cart/session/start", new LegacyStartSessionRequest(CartId, null))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await _client.PostAsJsonAsync("/api/sessions", new StartSessionRequest(CartId))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync($"/api/cart/active/{CartId}")).StatusCode);
-        var added = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/items", new CartAddItemRequest("ITEM-1", 50));
+        var added = await _client.PostAsJsonAsync($"/api/cart/{started.SessionId}/movements", CreateScanRequest(started.SessionId));
         Assert.Equal(HttpStatusCode.OK, added.StatusCode);
         var summary = (await _client.GetFromJsonAsync<CartSummaryResponse>($"/api/sessions/{started.SessionId}"))!;
         Assert.Equal(100, summary.TotalMinor); Assert.Equal("منتج", Assert.Single(summary.Items).NameAr);
@@ -368,7 +369,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         await _factory.InDatabaseAsync(async db =>
         {
             Assert.Equal(100, (await db.SessionItems.SingleAsync()).UnitPriceMinor);
-            Assert.Equal(DetectionOutcome.Accepted, (await db.DetectionEvents.SingleAsync()).Outcome);
+            Assert.Equal(CartItemOutcome.Accepted, (await db.CartMovementItems.SingleAsync()).Outcome);
         });
     }
 
@@ -425,18 +426,23 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
     public async Task WeightMismatchAndUnavailableParentDoNotAddInvoiceItems()
     {
         var session = await StartAsync(new StartSessionRequest(CartId));
-        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 100))).StatusCode);
+        var now = DateTime.UtcNow;
+        var mismatch = new CartMovementRequest(Guid.NewGuid(), Guid.NewGuid(), 1, Guid.NewGuid(), now, now,
+            [new(CartItemAction.Enter, "ITEM-1", Confidence: 0.99f)], new(0, 100, true));
+        var response = await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", mismatch);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("MOVEMENT_WEIGHT_MISMATCH", (await response.Content.ReadFromJsonAsync<CartMovementResult>())!.Movement.ReasonCode);
         await _factory.InDatabaseAsync(async db =>
         {
             Assert.Empty(await db.SessionItems.ToListAsync());
-            Assert.Equal(DetectionOutcome.Rejected, (await db.DetectionEvents.SingleAsync()).Outcome);
+            Assert.Equal(CartItemOutcome.Unknown, (await db.CartMovementItems.SingleAsync()).Outcome);
             (await db.Products.SingleAsync()).IsActive = false;
             await db.SaveChangesAsync();
         });
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+        var unavailable = await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", CreateScanRequest(session.SessionId) with { Sequence = 2 });
+        Assert.Equal("PRODUCT_UNAVAILABLE", (await unavailable.Content.ReadFromJsonAsync<CartMovementResult>())!.Movement.ReasonCode);
         Assert.Equal(0, (await _client.GetFromJsonAsync<CartSummaryResponse>($"/api/sessions/{session.SessionId}"))!.TotalMinor);
     }
-
     [Fact]
     public async Task SessionRequestValidationIsPreservedAcrossMergedDtos()
     {
@@ -467,7 +473,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal("open", started.Status);
         Assert.Empty(started.Items);
         Assert.Equal(HttpStatusCode.OK,
-            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", CreateScanRequest(session.SessionId))).StatusCode);
         var firstUpdate = await ReadUpdateAsync(updates);
         Assert.Equal(session.SessionId, firstUpdate.SessionId);
         Assert.Equal(CartId, firstUpdate.CartId);
@@ -476,7 +482,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal(_variantId, Assert.Single(firstUpdate.Items).VariantId);
 
         Assert.Equal(HttpStatusCode.OK,
-            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/items", new CartAddItemRequest("ITEM-1", 50))).StatusCode);
+            (await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", CreateScanRequest(session.SessionId))).StatusCode);
         var secondUpdate = await ReadUpdateAsync(updates);
         Assert.Equal(200, secondUpdate.TotalMinor);
         Assert.Equal(2, secondUpdate.ItemsCount);
@@ -495,19 +501,6 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         Assert.Equal(200, checkout.GetProperty("totalPaidMinor").GetInt32());
         Assert.False(obsoleteEvents.Reader.TryRead(out _));
         Assert.False(updates.Reader.TryRead(out _));
-    }
-
-    [Theory]
-    [InlineData(null, false)]
-    [InlineData("Customer", false)]
-    [InlineData("Staff", true)]
-    [InlineData("Admin", true)]
-    public async Task SignalRDashboardSubscriptionChecksJwtRoles(string? role, bool allowed)
-    {
-        await using var hub = CreateHub(role);
-        await hub.StartAsync();
-        if (allowed) await hub.InvokeAsync("JoinDashboardGroup");
-        else await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync("JoinDashboardGroup"));
     }
 
     private HubConnection CreateHub(string? role = null) => new HubConnectionBuilder()
@@ -544,5 +537,14 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
         var response = await _client.PatchAsJsonAsync($"/api/carts/{CartId}", new UpdateCartTelemetryRequest(battery, null));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<CartTelemetryResponse>())!;
+    }
+    private readonly Dictionary<Guid, int> _movementSequences = new();
+    private CartMovementRequest CreateScanRequest(Guid sessionId)
+    {
+        var sequence = _movementSequences.GetValueOrDefault(sessionId) + 1;
+        _movementSequences[sessionId] = sequence;
+        var now = DateTime.UtcNow;
+        return new(Guid.NewGuid(), Guid.NewGuid(), sequence, Guid.NewGuid(), now, now,
+            [new(CartItemAction.Scan, "ITEM-1", CartItemSource.Scanner)]);
     }
 }

@@ -14,5 +14,8 @@ public class Session : BaseEntity
     public DateTime? ClosedAt { get; set; }
     public Guid? ClosedBy { get; set; }
     public CloseReason? CloseReason { get; set; }
+    public int LastMovementSequence { get; set; }
+    public int? BasketWeightG { get; set; }
+    public int? ReconciledBasketWeightG { get; set; }
 
 }

@@ -17,6 +17,8 @@ public static class DependencyInjection
         services.AddScoped<CatalogDashboardService>();
         services.AddScoped<ISessionService, SessionService>();
         services.AddScoped<ICartService, CartService>();
+        services.AddScoped<ICartMovementService, CartMovementService>();
+        services.AddScoped<CartMovementProcessor>();
         services.AddValidatorsFromAssemblyContaining<CategoryService>();
         return services;
     }

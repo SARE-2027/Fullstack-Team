@@ -4,6 +4,7 @@ using SARE.Application.Common.DTOs;
 using SARE.Application.Common.Exceptions;
 using SARE.Application.Common.Interfaces;
 using SARE.Application.DTOs.Catalog;
+using SARE.Application.DTOs.Cart;
 using SARE.Domain.Catalog;
 
 namespace SARE.Infrastructure.Persistence.Repositories;
@@ -18,6 +19,13 @@ public sealed class ProductVariantRepository(AppDbContext context) : IProductVar
 
     public Task<ProductVariant?> FindByBarcodeAsync(string barcode, CancellationToken ct) =>
         context.ProductVariants.SingleOrDefaultAsync(variant => variant.Barcode == barcode, ct);
+
+    public Task<Dictionary<string, CartVariantData>> GetCartVariantsAsync(IReadOnlyCollection<string> barcodes, CancellationToken ct) =>
+        (from variant in context.ProductVariants.AsNoTracking()
+         join product in context.Products on variant.ProductId equals product.Id
+         where barcodes.Contains(variant.Barcode)
+         select new CartVariantData(variant.Id, variant.Barcode, variant.PriceMinor,
+             variant.WeightG, variant.IsActive && product.IsActive)).ToDictionaryAsync(variant => variant.Barcode, ct);
 
     public Task<List<ProductOptionValue>> GetProductValuesAsync(Guid productId, CancellationToken ct) =>
         context.ProductOptionValues

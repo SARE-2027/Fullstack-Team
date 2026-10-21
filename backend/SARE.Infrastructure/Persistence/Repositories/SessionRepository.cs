@@ -51,15 +51,19 @@ public class SessionRepository(AppDbContext db) : ISessionRepository
                         item.Id,
                         item.VariantId,
                         product.Id,
-                        variant.Barcode,
+                        item.Barcode,
                         product.NameAr,
                         product.NameEn,
                         product.ImageUrl,
                         item.UnitPriceMinor,
-                        variant.WeightG,
+                        item.ExpectedWeightG,
                         item.Source,
-                        item.AddedAt)
-                ).ToList()
+                        item.AddedAt) { BasketPresence = item.BasketPresence, RemovalRequestedAt = item.RemovalRequestedAt }
+                ).ToList(),
+                Pending = db.CartMovements.Where(movement => movement.SessionId == session.Id
+                    && movement.Status == CartMovementStatus.NeedsConfirmation)
+                    .OrderBy(movement => movement.Sequence)
+                    .Select(movement => new { Movement = movement, Details = movement.Items.OrderBy(item => item.Position).ToList() }).ToList()
             }
         ).ToListAsync(ct);
 
@@ -77,6 +81,13 @@ public class SessionRepository(AppDbContext db) : ISessionRepository
             UpdatedAt = row.Session.LastActivityAt,
             ClosedAt = row.Session.ClosedAt,
             ClosedByUserId = row.Session.ClosedBy,
+            LastMovementSequence = row.Session.LastMovementSequence,
+            BasketWeightG = row.Session.BasketWeightG,
+            PendingMovements = row.Pending.Select(entry =>
+            {
+                entry.Movement.Items = entry.Details;
+                return SARE.Application.Services.CartMovementService.ToResponse(entry.Movement);
+            }).ToList(),
             CloseReason = row.Session.CloseReason switch
             {
                 SARE.Domain.Enums.CloseReason.StaffClosed => "staff_closed",
@@ -99,6 +110,11 @@ public class SessionRepository(AppDbContext db) : ISessionRepository
             .Where(item => item.SessionId == sessionId && item.RemovedAt == null)
             .SumAsync(item => (int?)item.UnitPriceMinor, ct) ?? 0;
     }
+
+    public async Task<bool> HasPendingChangesAsync(Guid sessionId, CancellationToken ct = default) =>
+        await db.CartMovements.AnyAsync(x => x.SessionId == sessionId
+            && x.Status == CartMovementStatus.NeedsConfirmation, ct)
+        || await db.SessionItems.AnyAsync(x => x.SessionId == sessionId && x.RemovedAt == null && x.RemovalRequestedAt != null, ct);
 
     public async Task AddAsync(Session session, CancellationToken ct = default)
     {
@@ -125,39 +141,4 @@ public class SessionRepository(AppDbContext db) : ISessionRepository
         await db.SaveChangesAsync(ct);
     }
 
-    public Task<DetectionEvent?> GetDetectionEventAsync(Guid eventId, CancellationToken ct = default)
-        => db.DetectionEvents.AsNoTracking().SingleOrDefaultAsync(detection => detection.Id == eventId, ct);
-
-    public async Task<bool> TryAddDetectionEventAsync(DetectionEvent detectionEvent, CancellationToken ct = default)
-    {
-        await db.DetectionEvents.AddAsync(detectionEvent, ct);
-        return await TrySaveDetectionAsync(detectionEvent.Id, ct);
-    }
-
-    public async Task<bool> TryAddSessionItemWithEventAsync(SessionItem sessionItem, DetectionEvent detectionEvent, Session session, CancellationToken ct = default)
-    {
-        db.SessionItems.Add(sessionItem);
-        db.DetectionEvents.Add(detectionEvent);
-        db.Sessions.Update(session);
-        return await TrySaveDetectionAsync(detectionEvent.Id, ct);
-    }
-
-    private async Task<bool> TrySaveDetectionAsync(Guid eventId, CancellationToken ct)
-    {
-        try
-        {
-            // EF saves the event, item and total in one transaction.
-            await db.SaveChangesAsync(ct);
-            return true;
-        }
-        catch (DbUpdateException)
-        {
-            // A concurrent retry may hit either the event PK or the session concurrency token.
-            // Discard the rolled-back changes before reading the committed winning event.
-            db.ChangeTracker.Clear();
-            if (await db.DetectionEvents.AsNoTracking().AnyAsync(detection => detection.Id == eventId, ct))
-                return false;
-            throw;
-        }
-    }
 }

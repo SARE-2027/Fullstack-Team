@@ -18,7 +18,8 @@ public class SessionService(
     IUnitOfWork uow,
     IValidator<StartSessionRequest>? startValidator = null,
     IValidator<CloseSessionRequest>? closeValidator = null,
-    IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null) : ISessionService
+    IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null,
+    CartMovementProcessor? movementProcessor = null) : ISessionService
 {
     public Task<IReadOnlyList<CartSummaryResponse>> GetSessionsAsync(CancellationToken ct = default)
     {
@@ -208,6 +209,17 @@ public class SessionService(
         // 2. التحقق من أن الجلسة ما زالت مفتوحة
         if (session.Status != SessionStatus.Open)
             throw new ConflictException($"الجلسة {sessionId} مغلقة بالفعل بحالة ({session.Status})");
+        if (await sessions.HasPendingChangesAsync(sessionId, ct))
+            throw new ConflictException("Resolve pending movements and removal requests before closing.", "PENDING_CHANGES");
+        if (session.LastMovementSequence > 0 && session.BasketWeightG.HasValue)
+        {
+            var snapshot = await GetSessionSummaryAsync(sessionId, ct);
+            var weights = snapshot.Items.Where(item => item.BasketPresence == BasketPresence.Inside)
+                .Select(item => item.ExpectedWeightG);
+            var tolerance = movementProcessor?.Tolerance(weights) ?? 15;
+            if (!snapshot.ExpectedBasketWeightG.HasValue || Math.Abs(session.BasketWeightG.Value - snapshot.ExpectedBasketWeightG.Value) > tolerance)
+                throw new ConflictException("Basket weight is not reconciled.", "BASKET_WEIGHT_MISMATCH");
+        }
 
         // 3. التحقق من وجود الموظف المغلق (إن وجد)
         if (request?.ClosedByUserId.HasValue == true)

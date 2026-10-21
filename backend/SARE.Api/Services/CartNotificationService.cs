@@ -24,13 +24,6 @@ public class CartNotificationService(
         }
     }
 
-    public async Task NotifyFraudAlertAsync(string cartId, Guid sessionId, string barcode, int weightDiffG, string message)
-    {
-        var alert = new { cartId, sessionId, barcode, weightDiffG, message, timestamp = DateTime.UtcNow };
-        await SendAsync("StoreDashboard", "FraudAlert", alert);
-        await SendAsync($"cart_{cartId}", "WeightMismatchWarning", alert);
-    }
-
     public Task NotifyCheckoutSuccessAsync(string cartId, Guid sessionId, int totalPaidMinor, string receiptHash) =>
         SendAsync($"cart_{cartId}", "CheckoutSuccess", new { cartId, sessionId, totalPaidMinor, receiptHash, timestamp = DateTime.UtcNow });
 
