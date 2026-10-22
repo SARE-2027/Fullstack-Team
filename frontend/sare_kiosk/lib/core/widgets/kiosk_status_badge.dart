@@ -30,13 +30,14 @@ class KioskStatusBadge extends StatelessWidget {
     final resolvedBg = backgroundColor ?? colors.textFieldFill;
     final resolvedFg = textColor ?? colors.secondaryText;
 
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: resolvedBg,
-        borderRadius: BorderRadius.circular(10),
-        border: borderColor != null ? Border.all(color: borderColor!) : null,
-      ),
+    return RepaintBoundary(
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: resolvedBg,
+          borderRadius: BorderRadius.circular(10),
+          border: borderColor != null ? Border.all(color: borderColor!) : null,
+        ),
       child: AnimatedSize(
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeInOutCubic,
@@ -67,6 +68,7 @@ class KioskStatusBadge extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

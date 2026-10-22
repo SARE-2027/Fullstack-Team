@@ -58,16 +58,17 @@ class KioskStatusBanner extends StatelessWidget {
         break;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: primaryColor.withValues(alpha: 0.4),
-          width: 1.5,
+    return RepaintBoundary(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: primaryColor.withValues(alpha: 0.4),
+            width: 1.5,
+          ),
         ),
-      ),
       child: Row(
         children: [
           Icon(
@@ -101,6 +102,7 @@ class KioskStatusBanner extends StatelessWidget {
             ),
           ],
         ],
+      ),
       ),
     );
   }

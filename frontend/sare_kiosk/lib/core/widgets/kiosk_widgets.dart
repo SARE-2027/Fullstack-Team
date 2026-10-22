@@ -8,6 +8,8 @@ export 'custom_text.dart';
 export 'kiosk_action_card.dart';
 export 'kiosk_button.dart';
 export 'kiosk_header_button.dart';
+export 'kiosk_scaffold.dart';
+export 'kiosk_staff_help_dialog.dart';
 export 'kiosk_status_badge.dart';
 export 'kiosk_status_banner.dart';
 export 'kiosk_text_field.dart';

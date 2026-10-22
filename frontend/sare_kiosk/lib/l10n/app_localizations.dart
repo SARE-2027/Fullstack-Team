@@ -152,11 +152,23 @@ abstract class AppLocalizations {
   /// **'Shopping Cart'**
   String get cartTitle;
 
+  /// No description provided for @emptyCartTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your cart is empty'**
+  String get emptyCartTitle;
+
   /// No description provided for @emptyCartMessage.
   ///
   /// In en, this message translates to:
-  /// **'Your cart is empty. Scan an item barcode to begin shopping!'**
+  /// **'Scan an item barcode or tap a catalog item below to begin shopping'**
   String get emptyCartMessage;
+
+  /// No description provided for @emptyCartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Place items in the basket after scanning — weight is verified within ±15g'**
+  String get emptyCartHint;
 
   /// No description provided for @itemAddedSuccess.
   ///
@@ -167,19 +179,19 @@ abstract class AppLocalizations {
   /// No description provided for @itemRemoved.
   ///
   /// In en, this message translates to:
-  /// **'Item removed from cart'**
+  /// **'Item removed from cart and basket weight updated'**
   String get itemRemoved;
 
   /// No description provided for @weightVerifying.
   ///
   /// In en, this message translates to:
-  /// **'Verifying item weight...'**
+  /// **'Verifying item weight on load cells...'**
   String get weightVerifying;
 
   /// No description provided for @weightMatchSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Weight verified (+/-15g match)'**
+  /// **'Weight verified (±15g match)'**
   String get weightMatchSuccess;
 
   /// No description provided for @weightMismatchWarning.
@@ -188,11 +200,41 @@ abstract class AppLocalizations {
   /// **'Weight discrepancy detected! Please re-check the last placed item.'**
   String get weightMismatchWarning;
 
+  /// No description provided for @weightMismatchDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Expected {expected} but measured {measured} — item rejected'**
+  String weightMismatchDetail(String expected, String measured);
+
   /// No description provided for @scanPrompt.
   ///
   /// In en, this message translates to:
-  /// **'Scan barcode under camera scanner'**
+  /// **'Scan barcode with 2D scanner or enter manually'**
   String get scanPrompt;
+
+  /// No description provided for @barcodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Barcode number (e.g. 6223000123456)'**
+  String get barcodeHint;
+
+  /// No description provided for @addItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Item'**
+  String get addItem;
+
+  /// No description provided for @verifyWeightHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter measured weight (g) or leave empty to auto-verify by catalog weight'**
+  String get verifyWeightHint;
+
+  /// No description provided for @weightGramsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Weight (g)'**
+  String get weightGramsHint;
 
   /// No description provided for @totalAmount.
   ///
@@ -265,6 +307,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
+
+  /// No description provided for @startingSession.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting session…'**
+  String get startingSession;
+
+  /// No description provided for @sessionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start session. Please try again.'**
+  String get sessionFailed;
+
+  /// No description provided for @cartOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Cart is offline or disabled'**
+  String get cartOffline;
+
+  /// No description provided for @scaleOfflineHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Scale is offline — items can still be added by barcode confirmation'**
+  String get scaleOfflineHelp;
+
+  /// No description provided for @networkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Network error. Check connection and retry.'**
+  String get networkError;
+
+  /// No description provided for @retry.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get retry;
+
+  /// No description provided for @continueShopping.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue Shopping'**
+  String get continueShopping;
+
+  /// No description provided for @removeItemConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this item from the cart?'**
+  String get removeItemConfirm;
+
+  /// No description provided for @confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get confirm;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @itemsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String itemsCount(int count);
+
+  /// No description provided for @checkoutTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Checkout & Payment Summary'**
+  String get checkoutTitle;
+
+  /// No description provided for @payWithCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with Bank Card (Contactless POS)'**
+  String get payWithCard;
+
+  /// No description provided for @payWithWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay with Mobile Wallet (InstaPay / QR)'**
+  String get payWithWallet;
+
+  /// No description provided for @payWithCashier.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay at Express Cashier Counter'**
+  String get payWithCashier;
+
+  /// No description provided for @orderTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Order Total'**
+  String get orderTotal;
+
+  /// No description provided for @paymentSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Successful!'**
+  String get paymentSuccess;
+
+  /// No description provided for @paymentSuccessSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Thank you for shopping with SARE Autonomous Cart'**
+  String get paymentSuccessSubtitle;
+
+  /// No description provided for @receiptHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan this QR code with your phone camera to save your digital receipt. It also serves as your Exit Gate Pass.'**
+  String get receiptHint;
+
+  /// No description provided for @receiptHashLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt Pass'**
+  String get receiptHashLabel;
+
+  /// No description provided for @doneAndExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Done — Return to Welcome Screen'**
+  String get doneAndExit;
+
+  /// No description provided for @exitPass.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified Exit Pass'**
+  String get exitPass;
+
+  /// No description provided for @autoResetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Returning to welcome screen in {seconds}s'**
+  String autoResetHint(int seconds);
+
+  /// No description provided for @help.
+  ///
+  /// In en, this message translates to:
+  /// **'Help'**
+  String get help;
+
+  /// No description provided for @callStaff.
+  ///
+  /// In en, this message translates to:
+  /// **'Call Staff'**
+  String get callStaff;
+
+  /// No description provided for @dismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get dismiss;
+
+  /// No description provided for @ok.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get ok;
+
+  /// No description provided for @scaleReadyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scale Ready'**
+  String get scaleReadyLabel;
+
+  /// No description provided for @scaleOfflineLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scale Offline'**
+  String get scaleOfflineLabel;
+
+  /// No description provided for @removeItemButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get removeItemButton;
+
+  /// No description provided for @endSessionButton.
+  ///
+  /// In en, this message translates to:
+  /// **'End Session'**
+  String get endSessionButton;
+
+  /// No description provided for @endSessionConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'End Shopping Session?'**
+  String get endSessionConfirmTitle;
+
+  /// No description provided for @endSessionConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This will close your current cart session and return to the welcome screen.'**
+  String get endSessionConfirmMessage;
+
+  /// No description provided for @nfcModalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Member NFC Sign-In'**
+  String get nfcModalTitle;
+
+  /// No description provided for @nfcModalSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Wave your store membership card near the handle NFC reader or pick a demo card below'**
+  String get nfcModalSubtitle;
+
+  /// No description provided for @nfcInputHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter NFC Card UID (e.g. 04:A2:19:7C)'**
+  String get nfcInputHint;
+
+  /// No description provided for @nfcConnectButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In with NFC'**
+  String get nfcConnectButton;
+
+  /// No description provided for @guestShopperBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest Shopper'**
+  String get guestShopperBadge;
+
+  /// No description provided for @memberShopperBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Member: {name}'**
+  String memberShopperBadge(String name);
+
+  /// No description provided for @liveScaleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Basket Load-Cell Telemetry'**
+  String get liveScaleTitle;
+
+  /// No description provided for @autoTareBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-Tare: 0g'**
+  String get autoTareBadge;
+
+  /// No description provided for @toleranceBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'±15g Gate'**
+  String get toleranceBadge;
+
+  /// No description provided for @simulatorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Smart Sensor & Catalog Simulator'**
+  String get simulatorTitle;
+
+  /// No description provided for @simulatorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap any supermarket product to simulate barcode scan + load-cell weight verification'**
+  String get simulatorSubtitle;
+
+  /// No description provided for @simulateValidScan.
+  ///
+  /// In en, this message translates to:
+  /// **'+ Scan (Match)'**
+  String get simulateValidScan;
+
+  /// No description provided for @simulateFraudScan.
+  ///
+  /// In en, this message translates to:
+  /// **'Fraud (+95g)'**
+  String get simulateFraudScan;
+
+  /// No description provided for @staffModalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Staff Assistance Notified'**
+  String get staffModalTitle;
+
+  /// No description provided for @staffModalMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A store attendant has been alerted and is heading to Cart #{cartNumber} ({location}).'**
+  String staffModalMessage(String cartNumber, String location);
+
+  /// No description provided for @paymentMethodInstructionCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap your contactless Visa, Mastercard, or Meeza card on the terminal beside the screen.'**
+  String get paymentMethodInstructionCard;
+
+  /// No description provided for @paymentMethodInstructionWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the dynamic Paymob / InstaPay QR using your banking wallet app to authorize payment.'**
+  String get paymentMethodInstructionWallet;
+
+  /// No description provided for @paymentMethodInstructionCashier.
+  ///
+  /// In en, this message translates to:
+  /// **'Present Cart #{cartNumber} at the express checkout desk to settle in cash.'**
+  String paymentMethodInstructionCashier(String cartNumber);
+
+  /// No description provided for @orderItemsHeading.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified Basket Items'**
+  String get orderItemsHeading;
+
+  /// No description provided for @totalBasketWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Verified Weight'**
+  String get totalBasketWeight;
+
+  /// No description provided for @pauseTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold Screen'**
+  String get pauseTimer;
+
+  /// No description provided for @resumeTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume Auto-Reset'**
+  String get resumeTimer;
 }
 
 class _AppLocalizationsDelegate
