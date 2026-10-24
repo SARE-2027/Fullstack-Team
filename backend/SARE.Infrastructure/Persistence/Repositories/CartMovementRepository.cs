@@ -22,9 +22,11 @@ public sealed class CartMovementRepository(AppDbContext db) : ICartMovementRepos
     public Task<List<SessionItem>> GetSessionItemsAsync(Guid sessionId, CancellationToken ct) =>
         db.SessionItems.Where(x => x.SessionId == sessionId).ToListAsync(ct);
 
-    public Task<bool> HasUnresolvedBasketMovementAsync(Guid sessionId, CancellationToken ct) =>
-        db.CartMovements.AnyAsync(movement => movement.SessionId == sessionId && movement.HasBasketChange
-            && movement.Status == CartMovementStatus.NeedsConfirmation, ct);
+    public Task<CartBasketAudit?> GetAuditAsync(Guid sessionId, CancellationToken ct) =>
+        db.CartBasketAudits.Include(audit => audit.Items)
+            .SingleOrDefaultAsync(audit => audit.SessionId == sessionId && audit.CompletedAtUtc == null, ct);
+
+    public void AddAudit(CartBasketAudit audit) => db.CartBasketAudits.Add(audit);
 
     public async Task<bool> TrySaveAsync(Session session, CartMovement movement, CartEventReceipt receipt,
         IReadOnlyList<SessionItem> newItems, CancellationToken ct)

@@ -6,312 +6,347 @@ using SARE.Domain.Enums;
 
 namespace SARE.Application.Services;
 
-// يراجع حركة واحدة فقط؛ لا يستقبل أجزاء حركة ولا يعيد معالجة حركات قديمة.
+// قرار الهوية لكل item؛ المعلق رصيد كتلة للسلة، وليس قائمة منتجات نخمن عددها.
 public sealed class CartMovementProcessor(IOptions<CartMovementOptions> options)
 {
-    // قرار مؤقت في الذاكرة؛ لا نغيّر بنود الفاتورة قبل اكتمال كل الفحوص.
-    private sealed record ItemChange(CartMovementItem Observation, SessionItem? Unit, CartItemEffect Effect);
+    private readonly CartWeightPolicy weightPolicy = new(options);
+    private sealed record Change(CartMovementItem Item, SessionItem? Unit, CartItemEffect Effect);
 
-    // يرجع البنود الجديدة التي ستُحفظ، أو قائمة فارغة إذا احتاجت الحركة مراجعة.
     public IReadOnlyList<SessionItem> Process(Session session, CartMovement movement,
-        List<SessionItem> invoiceItems, Dictionary<string, CartVariantData> catalog)
+        List<SessionItem> invoice, Dictionary<string, CartVariantData> catalog, IReadOnlyList<CartMovement> exitQueue)
     {
-        // نحدد بيانات كل الملاحظات ليراها المشرف حتى لو فشلت ملاحظة أخرى.
-        foreach (var observation in movement.Items)
-            Identify(observation, catalog);
-        // المجهول أو الثقة المنخفضة يمنعان اعتماد الحركة كاملة.
-        var unidentified = movement.Items.FirstOrDefault(item => item.ReasonCode is not null);
-        // نتيجة غير محسومة لا تضيف ولا تحذف أي بند في الفاتورة.
-        if (unidentified is not null)
-            return NeedsReview(movement, unidentified.ReasonCode!);
+        var exitQuestionOpen = exitQueue.Any(CartExitQueue.IsOpen);
+        foreach (var item in movement.Items) Identify(item, catalog);
+        movement.PendingWeightBeforeG = session.PendingWeightG;
+        var changes = new List<Change>();
+        var additions = new List<SessionItem>();
+        var inside = invoice.Where(item => item.RemovedAt == null && item.BasketPresence == BasketPresence.Inside).ToList();
 
-        // البنود النشطة هي المشتريات الحالية، بما فيها القطع الممسوحة خارج السلة.
-        var activeUnits = invoiceItems.Where(item => item.RemovedAt == null).ToList();
-        // الوزن يخص الموجود داخل السلة فقط.
-        var insideUnits = activeUnits.Where(item => item.BasketPresence == BasketPresence.Inside).ToList();
-        // هذه البنود الجديدة لم تدخل قاعدة البيانات بعد.
-        var newUnits = new List<SessionItem>();
-        // القرارات ستطبق كلها معًا بعد التحقق من الهوية والوزن.
-        var changes = new List<ItemChange>();
-
-        // نجهّز السكان أولًا حتى نطابق الدخول معه تلقائيًا، حتى داخل نفس الرسالة.
+        // السكان شراء مستقل، حتى لو كان في نفس الحركة دخول مجهول أو كانت هناك مراجعة مفتوحة.
         foreach (var scan in movement.Items.Where(item => item.Action == CartItemAction.Scan))
         {
-            // Scanner يحدد الباركود؛ السعر والوزن ما زالا من الكتالوج.
-            var variant = catalog[scan.DetectedBarcode!];
-            // لا نبيع صنفًا معطلًا أو بديلًا تاريخيًا من الفاتورة.
-            if (!variant.IsAvailable)
-                return NeedsReview(movement, "PRODUCT_UNAVAILABLE");
-            // كل سكان إضافة جديدة؛ السيرفر يحفظ نسخة السعر والوزن ويولّد ID البند.
-            var unit = NewUnit(session.Id, scan, variant, BasketPresence.Unconfirmed);
-            // سنعمل INSERT لهذا البند إذا نجحت الحركة كاملة.
-            newUnits.Add(unit);
-            // السكان يزيد الفاتورة مرة واحدة، والدخول لاحقًا يؤكد الوضع فقط.
-            changes.Add(new(scan, unit, CartItemEffect.Added));
-        }
-
-        // لا نربط الدخول تلقائيًا بقطعة اختار العميل إلغاء سكانها في نفس الحركة.
-        var cancelledScanIds = movement.Items.Where(item => item.Action == CartItemAction.CancelScan)
-            .Select(item => item.TargetSessionItemId!.Value).ToHashSet();
-        // نرتب المشتريات السابقة بالأقدم، ثم نضيف سكانات هذه الحركة بترتيب ورودها.
-        var unplacedScans = activeUnits.OrderBy(unit => unit.AddedAt).ThenBy(unit => unit.Id).Concat(newUnits)
-            .Where(unit => unit.Source == CartItemSource.Scanner && unit.BasketPresence == BasketPresence.Unconfirmed
-                && !cancelledScanIds.Contains(unit.Id)).ToList();
-
-        // القطعة التي دخلت وخرجت بنفس التتبع داخل نفس الحركة لم تغيّر المشتريات.
-        var roundTrips = FindRoundTrips(movement.Items);
-        // نسجل عدم التغيير بدل إنشاء بند ثم حذفه.
-        changes.AddRange(roundTrips.Select(item => new ItemChange(item, null, CartItemEffect.NoChange)));
-        // نراجع الدخول والخروج الفعليين فقط.
-        foreach (var observation in movement.Items.Where(item => item.Action is CartItemAction.Enter or CartItemAction.Exit).Except(roundTrips))
-        {
-            // الخروج يجب أن يطابق قطعة موجودة فعلًا داخل السلة.
-            if (observation.Action == CartItemAction.Exit)
+            if (scan.ReasonCode is not null || !catalog[scan.DetectedBarcode!].IsAvailable)
             {
-                // نفس بند الفاتورة لا يمكن إخراجه مرتين داخل الرسالة.
-                var candidates = insideUnits.Where(unit => Matches(unit, observation)
-                    && changes.All(change => change.Effect != CartItemEffect.Removed || change.Unit != unit)).ToList();
-                // نختار بالمرجع أو التتبع؛ القطع ذات السعر/الوزن المختلف تحتاج اختيارًا صريحًا.
-                var selected = SelectExit(observation, movement, candidates);
-                // لا نخمن أي بند مالي يجب خصمه عند الالتباس.
-                if (selected is null)
-                    return NeedsReview(movement, "SELECT_SESSION_ITEM");
-                // نجهّز الحذف، بدون تعديل RemovedAt قبل مراجعة الوزن.
-                changes.Add(new(observation, selected, CartItemEffect.Removed));
-                // انتهى التعامل مع ملاحظة الخروج الحالية.
+                scan.Outcome = CartItemOutcome.Rejected;
+                scan.ReasonCode ??= "PRODUCT_UNAVAILABLE";
                 continue;
             }
-
-            // الدخول يستهلك تلقائيًا أقدم سكان منتظر من نفس الباركود في هذه الجلسة.
-            var placed = unplacedScans.FirstOrDefault(unit => Matches(unit, observation));
-            // وجود قطعة مستنية يؤكد وضعها بدون إضافة سعرها مرة ثانية.
-            if (placed is not null)
-            {
-                // تأكيد الوضع يغيّر حالة الوجود داخل السلة فقط.
-                changes.Add(new(observation, placed, CartItemEffect.PlacementConfirmed));
-                // نحجزها في التخطيط فورًا حتى لا يؤكد دخولان نفس القطعة داخل الحركة.
-                unplacedScans.Remove(placed);
-            }
-            else
-            {
-                // نقرأ بيانات البيع فقط لو الدخول يمثل قطعة جديدة.
-                var variant = catalog[observation.DetectedBarcode!];
-                // إضافة قطعة جديدة تتطلب صنفًا متاحًا للبيع.
-                if (!variant.IsAvailable)
-                    return NeedsReview(movement, "PRODUCT_UNAVAILABLE");
-                // نجهّز قطعة جديدة داخل السلة، بسعر ووزن السيرفر.
-                var unit = NewUnit(session.Id, observation, variant, BasketPresence.Inside);
-                // هذا البند سيُدرج فقط بعد نجاح وزن الحركة كلها.
-                newUnits.Add(unit);
-                // نسجل الإضافة المخطط لها.
-                changes.Add(new(observation, unit, CartItemEffect.Added));
-            }
+            var unit = NewUnit(session.Id, scan, catalog[scan.DetectedBarcode!], BasketPresence.Unconfirmed);
+            additions.Add(unit);
+            changes.Add(new(scan, unit, CartItemEffect.Added));
         }
+        var cancelled = movement.Items.Where(item => item.Action == CartItemAction.CancelScan)
+            .Select(item => item.TargetSessionItemId).ToHashSet();
+        var waiting = invoice.Where(item => item.RemovedAt == null).OrderBy(item => item.AddedAt).ThenBy(item => item.Id)
+            .Concat(additions).Where(item => item.Source == CartItemSource.Scanner
+                && item.BasketPresence == BasketPresence.Unconfirmed && !cancelled.Contains(item.Id)).ToList();
+        var roundTrips = RoundTrips(movement.Items);
+        changes.AddRange(roundTrips.Select(item => new Change(item, null, CartItemEffect.NoChange)));
+        var unknownEntries = new List<CartMovementItem>();
+        var exits = new List<CartMovementItem>();
+        string? itemProblem = null;
 
-        // إلغاء السكان يخص قطعة لم توضع في السلة، أو قطعة خرجت بالفعل.
-        foreach (var cancellation in movement.Items.Where(item => item.Action == CartItemAction.CancelScan))
+        foreach (var item in movement.Items.Where(item => item.Action == CartItemAction.Enter).Except(roundTrips))
         {
-            // المرجع هنا ID سابق من السيرفر، وليس ID جديدًا ينشئه الجهاز.
-            var unit = invoiceItems.SingleOrDefault(item => item.Id == cancellation.TargetSessionItemId);
-            // البند يجب أن يخص نفس الصنف والجلسة.
-            if (unit is null || !Matches(unit, cancellation))
-                return NeedsReview(movement, "ITEM_NOT_IN_SESSION");
-            // إذا كان الخروج مسجلًا فلا نخصم السعر ثانية.
-            if (unit.RemovedAt.HasValue || changes.Any(change => change.Unit == unit && change.Effect == CartItemEffect.Removed))
-                changes.Add(new(cancellation, unit, CartItemEffect.NoChange));
-            else
+            if (item.ReasonCode is not null || !StageEntry(session.Id, item, catalog, waiting, changes, additions))
+                unknownEntries.Add(item);
+        }
+        foreach (var item in movement.Items.Where(item => item.Action == CartItemAction.Exit).Except(roundTrips))
+        {
+            if (item.ReasonCode is not null || exitQuestionOpen)
             {
-                // زر الإلغاء لا يسمح بإسقاط سعر قطعة ما زالت داخل السلة.
-                if (unit.BasketPresence != BasketPresence.Unconfirmed
-                    || changes.Any(change => change.Unit == unit && change.Effect == CartItemEffect.PlacementConfirmed))
-                    return NeedsReview(movement, "PHYSICAL_EXIT_REQUIRED");
-                // نجهّز إلغاء القطعة الممسوحة الموجودة خارج السلة.
-                changes.Add(new(cancellation, unit, CartItemEffect.Removed));
+                exits.Add(item);
+                continue;
+            }
+            var candidates = ExitCandidates(item, inside, changes);
+            var selected = ChooseExit(item, movement, candidates);
+            if (item.TargetSessionItemId.HasValue && selected is null)
+                itemProblem ??= item.ReasonCode = "ITEM_NOT_IN_SESSION";
+            else if (session.PendingWeightG > 0)
+            {
+                // مع وجود مجهول، رؤية نفس الباركود لا تثبت أن الوحدة المحسوبة هي التي خرجت.
+                item.ReasonCode = candidates.Count > 0 ? "INVOICE_OR_PENDING" : null;
+                exits.Add(item);
+            }
+            else if (selected is not null)
+                changes.Add(new(item, selected, CartItemEffect.Removed));
+            else
+                itemProblem ??= item.ReasonCode = "ITEM_NOT_IN_SESSION";
+        }
+        foreach (var item in movement.Items.Where(item => item.Action == CartItemAction.CancelScan))
+        {
+            var unit = invoice.SingleOrDefault(unit => unit.Id == item.TargetSessionItemId);
+            if (unit is null || unit.Barcode != item.DetectedBarcode)
+                itemProblem ??= item.ReasonCode = "ITEM_NOT_IN_SESSION";
+            else if (unit.RemovedAt.HasValue || changes.Any(change => change.Unit == unit && change.Effect == CartItemEffect.Removed))
+                changes.Add(new(item, unit, CartItemEffect.NoChange));
+            else if (unit.BasketPresence != BasketPresence.Unconfirmed
+                || changes.Any(change => change.Unit == unit && change.Effect == CartItemEffect.PlacementConfirmed))
+                itemProblem ??= item.ReasonCode = "PHYSICAL_EXIT_REQUIRED";
+            else
+                changes.Add(new(item, unit, CartItemEffect.Removed));
+        }
+
+        // كل سماحية مشتقة من نسبة المنتج المحفوظة لكل قطعة؛ الجهاز يرسل قراءات الوزن فقط.
+        var actual = movement.HasBasketChange ? (long)movement.WeightAfterG!.Value - movement.WeightBeforeG!.Value : 0;
+        var beforeRange = CartWeightPolicy.Sum(inside.Select(UnitRange))
+            + new CartWeightRange(Math.Max(0, session.PendingWeightG - session.PendingWeightUncertaintyG),
+                (long)session.PendingWeightG + session.PendingWeightUncertaintyG);
+        var outstanding = exitQueue.Where(CartExitQueue.IsOpen).ToList();
+        var outstandingWeight = outstanding.Sum(report => (long)report.UnconfirmedExitWeightG!.Value);
+        var outstandingError = outstanding.Sum(report => (long)report.ExitWeightUncertaintyG);
+        beforeRange -= new CartWeightRange(outstandingWeight - outstandingError, outstandingWeight + outstandingError);
+        var missingWeight = inside.Any(unit => !unit.ExpectedWeightG.HasValue)
+            || changes.Any(change => change.Item.Action == CartItemAction.Enter && change.Unit is not null
+                && !change.Unit.ExpectedWeightG.HasValue);
+        var baselineValid = !movement.HasBasketChange || !missingWeight
+            && beforeRange.Contains(movement.WeightBeforeG!.Value);
+
+        // نستخدم المتبقي لدعم مرشح ضعيف واحد فقط. الباركود والثقة الأصليان لا يتغيران.
+        var uncertain = unknownEntries.Concat(exits.Where(item => item.ReasonCode == "LOW_CONFIDENCE")).ToList();
+        if (baselineValid && uncertain.Count == 1 && unknownEntries.Count + exits.Count == 1
+            && uncertain[0] is
+            {
+                ReasonCode: "LOW_CONFIDENCE", Confidence: not null, ExpectedWeightG: > 0
+            } weak)
+        {
+            var existing = weak.Action == CartItemAction.Enter ? waiting.FirstOrDefault(unit => unit.Barcode == weak.DetectedBarcode)
+                : ChooseExit(weak, movement, ExitCandidates(weak, inside, changes));
+            var candidateRange = existing is not null ? UnitRange(existing)
+                : CartWeightRange.For(weak.ExpectedWeightG, weak.WeightTolerancePercent);
+            var expectedRange = CartWeightPolicy.Sum(changes.Select(PhysicalRange))
+                + (weak.Action == CartItemAction.Enter ? candidateRange : candidateRange.Negative());
+            if (expectedRange.Contains(actual) && actual != 0)
+            {
+                if (weak.Action == CartItemAction.Enter && StageEntry(session.Id, weak, catalog, waiting, changes, additions))
+                {
+                    unknownEntries.Remove(weak);
+                    weak.ReasonCode = "WEIGHT_SUPPORTED";
+                }
+                else if (weak.Action == CartItemAction.Exit)
+                {
+                    weak.ReasonCode = "WEIGHT_SUPPORTED";
+                    if (!exitQuestionOpen && session.PendingWeightG == 0 && existing is not null)
+                    {
+                        exits.Remove(weak);
+                        changes.Add(new(weak, existing, CartItemEffect.Removed));
+                    }
+                }
             }
         }
 
-        // السكان وحده لا يحتاج ميزانًا؛ الحركات الفيزيائية تراجع وزن السلة بالكامل.
-        if (movement.HasBasketChange)
+        var remainder = actual - changes.Sum(PhysicalWeight);
+        var physicalRange = CartWeightPolicy.Sum(changes.Select(PhysicalRange));
+        var remainderRange = new CartWeightRange(actual, actual) - physicalRange;
+        var physicalUncertainty = (int)Math.Max(Math.Abs(remainderRange.Min - remainder), Math.Abs(remainderRange.Max - remainder));
+        Apply(changes, additions, invoice, movement);
+        if (itemProblem is not null) return Review(session, movement, itemProblem, additions);
+        if (!movement.HasBasketChange)
         {
-            // هذه أوزان بنود الفاتورة المحفوظة، وليست أوزانًا مرسلة من الجهاز.
-            if (insideUnits.Any(unit => !unit.ExpectedWeightG.HasValue)
-                || changes.Any(change => change.Observation.Action == CartItemAction.Enter
-                    && change.Unit is not null && !change.Unit.ExpectedWeightG.HasValue))
-                return NeedsReview(movement, "WEIGHT_SNAPSHOT_MISSING");
-            // نعرف وزن البداية من القطع المؤكدة داخل السلة.
-            var expectedBefore = insideUnits.Sum(unit => (long)unit.ExpectedWeightG!.Value);
-            // نحسب الدخول والخروج؛ السكان والإلغاء خارج السلة لا يغيران وزنها.
-            var expectedDelta = changes.Sum(change => PhysicalWeight(change));
-            // السماحية محدودة بإعدادات السيرفر وبوزن أصغر قطعة.
-            var weights = insideUnits.Select(unit => unit.ExpectedWeightG).Concat(changes
-                .Where(change => change.Observation.Action == CartItemAction.Enter).Select(change => change.Unit?.ExpectedWeightG));
-            var tolerance = Tolerance(weights, movement.WeightToleranceG);
-            // قراءة البداية يجب أن تتصل بآخر حالة سليمة للسلة.
-            if (Math.Abs(movement.WeightBeforeG!.Value - (session.ReconciledBasketWeightG ?? expectedBefore)) > tolerance)
-                return NeedsReview(movement, "WEIGHT_CONTINUITY_MISMATCH");
-            // وزن البداية يجب أن يوافق محتويات السلة المعروفة.
-            if (Math.Abs(movement.WeightBeforeG.Value - expectedBefore) > tolerance)
-                return NeedsReview(movement, "BASKET_WEIGHT_MISMATCH");
-            // فرق الميزان يجب أن يطابق مجموع ما دخل ناقص ما خرج.
-            if (Math.Abs((long)movement.WeightAfterG!.Value - movement.WeightBeforeG.Value - expectedDelta) > tolerance)
-                return NeedsReview(movement, "MOVEMENT_WEIGHT_MISMATCH");
-            // الوزن النهائي يجب أن يوافق المحتويات النهائية أيضًا.
-            if (Math.Abs(movement.WeightAfterG.Value - expectedBefore - expectedDelta) > tolerance)
-                return NeedsReview(movement, "BASKET_WEIGHT_MISMATCH");
+            movement.Status = CartMovementStatus.Accepted;
+            return additions;
         }
+        if (!baselineValid)
+            return Review(session, movement, missingWeight
+                ? "WEIGHT_SNAPSHOT_MISSING" : "WEIGHT_CONTINUITY_MISMATCH", additions);
+        // قد لا ترصد الكاميرا بعض القطع أصلًا؛ الفرق الموجب غير المفسر يظل Pending بلا عدد مفترض.
+        if (unknownEntries.Count == 0 && exits.Count == 0 && remainderRange.Min > 0)
+            unknownEntries.Add(new CartMovementItem
+            {
+                ReasonCode = "UNIDENTIFIED_WEIGHT"
+            });
+        // المتبقي السالب خروج لم ترصده الكاميرا، حتى لو غطاه دخول معروف وصافي الحركة موجب أو صفر.
+        // نحتاج محتويات سابقة يمكن أن تخرج؛ لا نخترع خروجًا من سلة كانت فارغة لتبرير دخول لم يزِد الوزن.
+        if (unknownEntries.Count == 0 && exits.Count == 0 && remainderRange.Max < 0
+            && (inside.Count > 0 || session.PendingWeightG > 0))
+            exits.Add(new CartMovementItem
+            {
+                ReasonCode = "UNIDENTIFIED_EXIT"
+            });
+        // قراءة بلا تغير أو تفسير مقابل لا تثبت عبور قطعة لها وزن، حتى لو كانت القطعة صغيرة.
+        if (actual == 0 && changes.Sum(PhysicalWeight) != 0 && unknownEntries.Count == 0 && exits.Count == 0)
+            return Review(session, movement, "MOVEMENT_WEIGHT_MISMATCH", additions);
+        if (unknownEntries.Count > 0 && exits.Count > 0)
+            return Review(session, movement, "MIXED_UNIDENTIFIED_CHANGES", additions);
 
-        // كل الفحوص نجحت؛ الآن فقط نعدّل بنود الفاتورة.
-        foreach (var change in changes)
-            Apply(change, movement.DeviceBootId);
-        // نضيف البنود الجديدة مرة واحدة إلى الحالة المستخدمة لحساب الإجمالي.
-        invoiceItems.AddRange(newUnits);
-        // قراءة الوزن أصبحت حالة سلة معتمدة بعد نجاح الحركة.
-        if (movement.HasBasketChange)
-            session.ReconciledBasketWeightG = movement.WeightAfterG;
-        // لا يوجد انتظار أو إعادة تشغيل لهذه الحركة بعد قبولها.
-        movement.Status = CartMovementStatus.Accepted;
-        // نزيل سبب المراجعة لأن جميع الشروط نجحت.
-        movement.ReasonCode = null;
-        // الـRepository سيعمل INSERT لهذه البنود مع الحركة والإيصال في نفس الحفظ.
-        return newUnits;
+        if (exits.Count > 0)
+            QueueExit(session, movement, -remainder, physicalUncertainty);
+        else if (unknownEntries.Count > 0)
+        {
+            var pending = (long)session.PendingWeightG + remainder;
+            if (remainder <= 0 || pending > 1_000_000)
+                return Review(session, movement, "MOVEMENT_WEIGHT_MISMATCH", additions);
+            session.PendingWeightG = (int)pending;
+            session.PendingWeightUncertaintyG = Math.Min(1_000_000,
+                session.PendingWeightUncertaintyG + physicalUncertainty);
+            session.BasketState = BasketState.Pending;
+            movement.ReasonCode = unknownEntries[0].ReasonCode;
+            movement.Status = CartMovementStatus.NeedsConfirmation;
+            foreach (var item in unknownEntries) item.Effect = CartItemEffect.PendingAdded;
+        }
+        else if (!physicalRange.Contains(actual))
+            return Review(session, movement, "MOVEMENT_WEIGHT_MISMATCH", additions);
+        else
+        {
+            // تحريك منتج معروف لا يصفر رصيدًا قديمًا صغيرًا داخل السماحية.
+            session.BasketState = session.PendingWeightG == 0 && !exitQuestionOpen ? BasketState.Verified : BasketState.Pending;
+            movement.Status = CartMovementStatus.Accepted;
+        }
+        movement.PendingWeightAfterG = session.PendingWeightG;
+        return additions;
     }
 
-    // وزن البند يؤثر في السلة فقط عند الدخول أو الخروج الفيزيائي.
-    private static long PhysicalWeight(ItemChange change)
+    private static void QueueExit(Session session, CartMovement movement, long weight, int uncertainty)
     {
-        // الدخول الجديد أو تأكيد دخول قطعة ممسوحة يزيد الوزن المتوقع.
-        if (change.Observation.Action == CartItemAction.Enter && change.Effect is CartItemEffect.Added or CartItemEffect.PlacementConfirmed)
-            return change.Unit!.ExpectedWeightG!.Value;
-        // الخروج يطرح وزن النسخة المحفوظة للقطعة المشتراة.
-        if (change.Observation.Action == CartItemAction.Exit && change.Effect == CartItemEffect.Removed)
-            return -change.Unit!.ExpectedWeightG!.Value;
-        // السكان، التأكيد، والإلغاء خارج السلة لا يضيفون وزنًا.
-        return 0;
-    }
-
-    // التنفيذ الفعلي يتم بعد اكتمال التحقق، وبعيدًا عن التخطيط السابق.
-    private static void Apply(ItemChange change, Guid bootId)
-    {
-        // نثبت أن الملاحظة اجتازت فحوص الحركة كلها.
-        change.Observation.Outcome = CartItemOutcome.Accepted;
-        // نسجل أثرها المالي/الفيزيائي للعميل والمشرف.
-        change.Observation.Effect = change.Effect;
-        // قد يكون NoChange لقطعة دخلت وخرجت بدون بند مالي.
-        if (change.Unit is null)
+        if (weight <= 0 || weight > 1_000_000)
+        {
+            Review(session, movement, "EXIT_WEIGHT_MISMATCH", []);
             return;
-        // نربط النتيجة ببند الفاتورة الذي اختاره أو أنشأه السيرفر.
-        change.Observation.SessionItemId = change.Unit.Id;
-        // نرجع هوية الصنف وسعره ووزنه المعتمدين من النسخة المحفوظة.
-        change.Observation.VariantId = change.Unit.VariantId;
-        // سعر الفاتورة الأصلي له الأولوية على سعر الكتالوج الحالي.
-        change.Observation.UnitPriceMinor = change.Unit.UnitPriceMinor;
-        // نفس وزن الشراء يستخدم عند الخروج لضمان استقرار الحساب.
-        change.Observation.ExpectedWeightG = change.Unit.ExpectedWeightG;
-        // الدخول يسجل التتبع المؤكد للقطعة داخل السلة.
-        if (change.Observation.Action == CartItemAction.Enter && change.Effect is CartItemEffect.Added or CartItemEffect.PlacementConfirmed)
-        {
-            // حالة Inside هي التي تدخل في حساب وزن السلة.
-            change.Unit.BasketPresence = BasketPresence.Inside;
-            // التتبع مرتبط بالكاميرا وتشغيل الجهاز لمنع خلط IDs بعد إعادة التشغيل.
-            change.Unit.BasketTrackId = change.Observation.TrackId;
-            // رقم التتبع قد يتكرر بين الكاميرات، لذلك نحفظ مصدره.
-            change.Unit.BasketCameraId = change.Observation.CameraId;
-            // إعادة تشغيل الجهاز لا تعني أن نفس TrackId يخص نفس القطعة.
-            change.Unit.BasketDeviceBootId = bootId;
         }
-        // الحذف يحافظ على السجل التاريخي بدل حذف الصف من قاعدة البيانات.
-        if (change.Effect == CartItemEffect.Removed)
+        // الوزن خرج بالفعل؛ هوية القطع والخصم يتحسمان من رأس الطابور فقط.
+        movement.UnconfirmedExitWeightG = (int)weight;
+        movement.ExitWeightUncertaintyG = uncertainty;
+        movement.ExitPendingWeightG = session.PendingWeightG;
+        movement.ExitPendingUncertaintyG = session.PendingWeightUncertaintyG;
+        movement.Status = CartMovementStatus.NeedsConfirmation;
+        movement.ReasonCode = "SELECT_EXIT_ITEMS";
+        session.BasketState = BasketState.Pending;
+    }
+    private static bool StageEntry(Guid sessionId, CartMovementItem item, Dictionary<string, CartVariantData> catalog,
+        List<SessionItem> waiting, List<Change> changes, List<SessionItem> additions)
+    {
+        var held = waiting.FirstOrDefault(unit => unit.Barcode == item.DetectedBarcode);
+        if (held is not null)
         {
-            // RemovedAt يستبعد هذه الوحدة من الفاتورة النشطة.
-            change.Unit.RemovedAt = DateTime.UtcNow;
-            // القطعة خرجت فلا تدخل في وزن السلة المتوقع.
-            change.Unit.BasketPresence = BasketPresence.Outside;
-            // الطلب الموجود على الشاشة اكتمل.
-            change.Unit.RemovalRequestedAt = null;
+            waiting.Remove(held);
+            changes.Add(new(item, held, CartItemEffect.PlacementConfirmed));
+            return true;
         }
+        var variant = catalog[item.DetectedBarcode!];
+        if (!variant.IsAvailable)
+        {
+            item.ReasonCode = "PRODUCT_UNAVAILABLE";
+            return false;
+        }
+        var unit = NewUnit(sessionId, item, variant, BasketPresence.Inside);
+        additions.Add(unit);
+        changes.Add(new(item, unit, CartItemEffect.Added));
+        return true;
     }
 
-    // يحدد الصنف من السيرفر ويتحقق من ثقة الموديل بدون تغيير الفاتورة.
+    private static List<SessionItem> ExitCandidates(CartMovementItem item, List<SessionItem> inside, List<Change> changes) =>
+        inside.Concat(changes.Where(change => change.Item.Action == CartItemAction.Enter).Select(change => change.Unit!))
+            .DistinctBy(unit => unit.Id).Where(unit => unit.Barcode == item.DetectedBarcode
+                && !changes.Any(change => change.Unit == unit && change.Effect == CartItemEffect.Removed)).ToList();
+
+    internal static SessionItem? ChooseExit(CartMovementItem item, CartMovement movement, List<SessionItem> candidates,
+        bool preferRemovalIntent = true)
+    {
+        if (item.TargetSessionItemId.HasValue) return candidates.SingleOrDefault(unit => unit.Id == item.TargetSessionItemId);
+        var tracked = candidates.Where(unit => !string.IsNullOrWhiteSpace(item.TrackId)
+            && unit.BasketTrackId == item.TrackId && unit.BasketCameraId == item.CameraId
+            && unit.BasketDeviceBootId == movement.DeviceBootId).ToList();
+        return tracked.Count == 1 ? tracked[0] : candidates.OrderByDescending(unit => preferRemovalIntent && unit.RemovalRequestedAt.HasValue)
+            .ThenBy(unit => unit.AddedAt).ThenBy(unit => unit.Id).FirstOrDefault();
+    }
+
     private void Identify(CartMovementItem item, Dictionary<string, CartVariantData> catalog)
     {
-        // ملاحظة بلا باركود تظل ظاهرة للمشرف ولا تتحول لصنف بالتخمين.
         if (string.IsNullOrWhiteSpace(item.DetectedBarcode)) item.ReasonCode = "ITEM_NOT_IDENTIFIED";
-        // نتيجة الكاميرا تحتاج الحد الأدنى للثقة؛ السكان لا يعتمد على ثقة YOLO.
-        else if (item.Source == CartItemSource.Vision && (!item.Confidence.HasValue || item.Confidence < options.Value.MinimumVisionConfidence))
-            item.ReasonCode = "LOW_CONFIDENCE";
-        // باركود غير معروف لا يضيف سعرًا أو صنفًا وهميًا.
         else if (!catalog.TryGetValue(item.DetectedBarcode, out var variant)) item.ReasonCode = "UNKNOWN_BARCODE";
         else
         {
-            // بيانات مرشحة للعرض والمراجعة، ولا تعني أن الفاتورة اتغيرت.
             item.VariantId = variant.Id;
-            // الوزن يأتي من الكتالوج ولا يثق في وزن يحدده العميل لكل صنف.
             item.ExpectedWeightG = variant.WeightG;
-            // السعر أيضًا من السيرفر، وليس من JSON القادم من العربة.
+            item.WeightTolerancePercent = weightPolicy.ResolvePercent(variant.WeightTolerancePercent);
             item.UnitPriceMinor = variant.PriceMinor;
+            if (item.Source == CartItemSource.Vision && (!item.Confidence.HasValue || item.Confidence < options.Value.MinimumVisionConfidence))
+                item.ReasonCode = "LOW_CONFIDENCE";
         }
     }
 
-    // السماحية لا تتجاوز إعداد السيرفر أو طلب العميل أو ربع أصغر قطعة.
-    public int Tolerance(IEnumerable<int?> weights, int requested = 100)
+    public decimal ResolveTolerancePercent(decimal? productPercent) => weightPolicy.ResolvePercent(productPercent);
+
+    public static CartWeightRange UnitRange(SessionItem unit) => CartWeightRange.For(unit.ExpectedWeightG, unit.WeightTolerancePercent);
+
+    private static CartWeightRange PhysicalRange(Change change)
     {
-        // هذا الحد يمنع اختفاء قطعة صغيرة بالكامل داخل سماحية الميزان.
-        var smallest = weights.Where(weight => weight > 0).Select(weight => weight!.Value).DefaultIfEmpty(int.MaxValue).Min();
-        // نختار أشد حدود السماحية المتاحة.
-        return Math.Min(Math.Min(requested, options.Value.WeightToleranceGrams), smallest / 4);
+        if (change.Item.Action == CartItemAction.Enter && change.Effect is CartItemEffect.Added or CartItemEffect.PlacementConfirmed)
+            return UnitRange(change.Unit!);
+        if (change.Item.Action == CartItemAction.Exit && change.Effect == CartItemEffect.Removed)
+            return UnitRange(change.Unit!).Negative();
+        return new(0, 0);
     }
 
-    // السيرفر ينشئ وحدة فاتورة لكل قطعة مقبولة، حتى لو تكرر نفس الباركود.
-    private static SessionItem NewUnit(Guid sessionId, CartMovementItem observation, CartVariantData variant, BasketPresence presence) => new()
+    private static long PhysicalWeight(Change change)
     {
-        // لا يأتي أي من هذين المعرفين من الجهاز كـID جديد لقطعة.
-        Id = Guid.NewGuid(), SessionId = sessionId, VariantId = variant.Id,
-        // نحفظ السعر والوزن والباركود وقت الإضافة.
-        UnitPriceMinor = variant.PriceMinor, ExpectedWeightG = variant.WeightG, Barcode = variant.Barcode,
-        // نسجل المصدر وحالة وجود القطعة داخل السلة.
-        Source = observation.Source, BasketPresence = presence, AddedAt = DateTime.UtcNow
+        if (change.Item.Action == CartItemAction.Enter
+            && change.Effect is CartItemEffect.Added or CartItemEffect.PlacementConfirmed)
+            return change.Unit!.ExpectedWeightG ?? 0;
+        if (change.Item.Action == CartItemAction.Exit && change.Effect == CartItemEffect.Removed)
+            return -(change.Unit!.ExpectedWeightG ?? 0);
+        return 0; // السكان والإلغاء خارج السلة لا يدخلان في فرق الوزن.
+    }
+
+    private static void Apply(List<Change> changes, List<SessionItem> additions, List<SessionItem> invoice, CartMovement movement)
+    {
+        foreach (var change in changes)
+        {
+            change.Item.Outcome = CartItemOutcome.Accepted;
+            change.Item.Effect = change.Effect;
+            var unit = change.Unit;
+            if (unit is null) continue;
+            change.Item.SessionItemId = unit.Id;
+            change.Item.VariantId = unit.VariantId;
+            change.Item.UnitPriceMinor = unit.UnitPriceMinor;
+            change.Item.ExpectedWeightG = unit.ExpectedWeightG;
+            change.Item.WeightTolerancePercent = unit.WeightTolerancePercent;
+            if (change.Item.Action == CartItemAction.Enter)
+            {
+                unit.BasketPresence = BasketPresence.Inside;
+                unit.BasketTrackId = change.Item.TrackId;
+                unit.BasketCameraId = change.Item.CameraId;
+                unit.BasketDeviceBootId = movement.DeviceBootId;
+                unit.PlacementSequence = movement.Sequence;
+            }
+            if (change.Effect == CartItemEffect.Removed) RemoveUnit(unit);
+        }
+        invoice.AddRange(additions);
+    }
+
+    public static void RemoveUnit(SessionItem unit)
+    {
+        unit.RemovedAt = DateTime.UtcNow;
+        unit.BasketPresence = BasketPresence.Outside;
+        unit.RemovalRequestedAt = null;
+    }
+
+    private static IReadOnlyList<SessionItem> Review(Session session, CartMovement movement, string reason, IReadOnlyList<SessionItem> additions)
+    {
+        session.BasketState = BasketState.NeedsStaff;
+        movement.Status = CartMovementStatus.NeedsConfirmation;
+        movement.ReasonCode = reason;
+        return additions;
+    }
+
+    private static SessionItem NewUnit(Guid sessionId, CartMovementItem item, CartVariantData variant, BasketPresence presence) => new()
+    {
+        Id = Guid.NewGuid(),
+        SessionId = sessionId,
+        VariantId = variant.Id,
+        Barcode = variant.Barcode,
+        UnitPriceMinor = variant.PriceMinor,
+        ExpectedWeightG = variant.WeightG,
+        // Identify ثبت النسبة الفعلية من المنتج أو إعداد السيرفر قبل إنشاء القطعة.
+        WeightTolerancePercent = item.WeightTolerancePercent,
+        Source = item.Source,
+        BasketPresence = presence,
+        AddedAt = DateTime.UtcNow
     };
 
-    // الباركود المحفوظ يحمي إخراج مشتريات العميل بعد تغيير الكتالوج.
-    private static bool Matches(SessionItem unit, CartMovementItem observation) =>
-        unit.Barcode == observation.DetectedBarcode;
-
-    // لا نختار بين أسعار أو أوزان مختلفة من غير مرجع واضح.
-    private static SessionItem? SelectExit(CartMovementItem observation, CartMovement movement, List<SessionItem> candidates)
-    {
-        // اختيار الشاشة يشير لبند موجود أنشأه السيرفر سابقًا.
-        if (observation.TargetSessionItemId.HasValue) return candidates.SingleOrDefault(unit => unit.Id == observation.TargetSessionItemId);
-        // إذا كان التتبع مستمرًا في نفس تشغيل الجهاز يمكنه تحديد القطعة.
-        var tracked = candidates.Where(unit => !string.IsNullOrWhiteSpace(observation.TrackId)
-            && unit.BasketTrackId == observation.TrackId && unit.BasketCameraId == observation.CameraId
-            && unit.BasketDeviceBootId == movement.DeviceBootId).ToList();
-        // المطابقة الوحيدة تتجنب اختيار قطعة أخرى من نفس الصنف.
-        if (tracked.Count == 1) return tracked[0];
-        // الأسعار أو الأوزان المختلفة تحتاج قرار المستخدم/المشرف.
-        if (candidates.Select(unit => (unit.VariantId, unit.UnitPriceMinor, unit.ExpectedWeightG)).Distinct().Count() > 1) return null;
-        // القطع المتكافئة ماليًا: نفضل طلب الإزالة ثم الأقدم.
-        return candidates.OrderByDescending(unit => unit.RemovalRequestedAt.HasValue).ThenBy(unit => unit.AddedAt).ThenBy(unit => unit.Id).FirstOrDefault();
-    }
-
-    // نفس التتبع في الاتجاهين يعني رجوع نفس القطعة داخل نافذة الحركة.
-    private static List<CartMovementItem> FindRoundTrips(IEnumerable<CartMovementItem> items) => items
-        // المرجع الصريح له أولوية على استنتاج التتبع.
-        .Where(item => item.Action is CartItemAction.Enter or CartItemAction.Exit
-            && !string.IsNullOrWhiteSpace(item.TrackId) && !item.TargetSessionItemId.HasValue)
-        // الكاميرات قد تعيد استخدام نفس TrackId، لذلك نجمعه مع الكاميرا والباركود.
-        .GroupBy(item => (item.TrackId, item.CameraId, item.DetectedBarcode))
-        // نلغي أثر دورة واحدة واضحة، ولا نحاول تفسير تكرارات غامضة.
+    private static List<CartMovementItem> RoundTrips(IEnumerable<CartMovementItem> items) => items
+        .Where(item => item.Action is CartItemAction.Enter or CartItemAction.Exit && !string.IsNullOrWhiteSpace(item.TrackId) && !item.TargetSessionItemId.HasValue)
+        .GroupBy(item => (item.CameraId, item.TrackId, item.DetectedBarcode))
         .Where(group => group.Count() == 2 && group.Count(item => item.Action == CartItemAction.Enter) == 1
             && group.Count(item => item.Action == CartItemAction.Exit) == 1).SelectMany(group => group).ToList();
-
-    // الفشل هنا نتيجة عمل تحتاج مشرفًا؛ لا يغيّر أي بند مالي.
-    private static IReadOnlyList<SessionItem> NeedsReview(CartMovement movement, string reason)
-    {
-        // نحفظ السبب ليظهر في SessionUpdated.
-        movement.ReasonCode = reason;
-        // الحسم يدوي عبر ReconcileCartBasket، بدون تصحيحات تلقائية.
-        movement.Status = CartMovementStatus.NeedsConfirmation;
-        // لا توجد INSERTs جديدة للفواتير عند فشل الحركة.
-        return [];
-    }
 }

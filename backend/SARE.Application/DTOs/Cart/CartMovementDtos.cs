@@ -2,7 +2,7 @@ using SARE.Domain.Enums;
 
 namespace SARE.Application.DTOs.Cart;
 
-public record BasketWeightDto(int BeforeG, int AfterG, bool IsStable, int ToleranceG = 15);
+public record BasketWeightDto(int BeforeG, int AfterG, bool IsStable);
 
 public record CartMovementItemRequest(
     CartItemAction Action, string? Barcode,
@@ -14,7 +14,11 @@ public record CartMovementRequest(
     Guid EventId, Guid MovementId, int Sequence, Guid DeviceBootId,
     DateTime StartedAtUtc, DateTime EndedAtUtc,
     IReadOnlyList<CartMovementItemRequest> Items, BasketWeightDto? Weight = null,
-    bool IsComplete = true, string? ModelVersion = null);
+    bool IsComplete = true, string? ModelVersion = null)
+{
+    // المسحات أثناء الجرد تشير للجرد الظاهر حاليًا على شاشة العربية.
+    public Guid? AuditId { get; init; }
+}
 
 public record CartMovementItemResponse(
     Guid ItemId, string Action, string? Barcode, Guid? VariantId,
@@ -35,11 +39,26 @@ public record CartMovementResponse(
     public DateTime StartedAtUtc { get; init; }
     public DateTime EndedAtUtc { get; init; }
     public string? ModelVersion { get; init; }
+    public int PendingWeightBeforeG { get; init; }
+    public int PendingWeightAfterG { get; init; }
+    public int? UnconfirmedExitWeightG { get; init; }
+    public Guid? RelatedMovementId { get; init; }
+    public Guid? ResolvedByMovementId { get; init; }
+    public bool ConfirmedByCustomer { get; init; }
+    public Guid? AuditId { get; init; }
 }
 
 public record CartMovementResult(Guid EventId, int NextSequence, CartMovementResponse Movement, CartSummaryResponse Session);
 
-public record ReconcileBasketRequest(Guid EventId, Guid MovementId, int Sequence, Guid DeviceBootId,
-    int StableBasketWeightG, IReadOnlyList<Guid> PendingMovementIds);
+public record CartVariantData(Guid Id, string Barcode, int PriceMinor, int WeightG, bool IsAvailable)
+{
+    public decimal? WeightTolerancePercent { get; init; }
+}
 
-public record CartVariantData(Guid Id, string Barcode, int PriceMinor, int WeightG, bool IsAvailable);
+public record ConfirmExitChoiceRequest(Guid EventId, Guid MovementId, int Sequence, Guid DeviceBootId,
+    Guid PendingMovementId, string ExpectedVersion, IReadOnlyList<Guid> SessionItemIds)
+{
+    public bool NeedsStaff { get; init; }
+}
+
+public record CartExitChoiceResponse(IReadOnlyList<Guid> SessionItemIds, int InvoiceWeightG, int PendingWeightG);

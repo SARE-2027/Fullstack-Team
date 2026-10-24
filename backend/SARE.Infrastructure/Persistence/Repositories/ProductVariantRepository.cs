@@ -25,7 +25,8 @@ public sealed class ProductVariantRepository(AppDbContext context) : IProductVar
          join product in context.Products on variant.ProductId equals product.Id
          where barcodes.Contains(variant.Barcode)
          select new CartVariantData(variant.Id, variant.Barcode, variant.PriceMinor,
-             variant.WeightG, variant.IsActive && product.IsActive)).ToDictionaryAsync(variant => variant.Barcode, ct);
+             variant.WeightG, variant.IsActive && product.IsActive)
+             { WeightTolerancePercent = product.WeightTolerancePercent }).ToDictionaryAsync(variant => variant.Barcode, ct);
 
     public Task<List<ProductOptionValue>> GetProductValuesAsync(Guid productId, CancellationToken ct) =>
         context.ProductOptionValues

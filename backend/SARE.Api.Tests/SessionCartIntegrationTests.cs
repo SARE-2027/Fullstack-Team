@@ -423,7 +423,7 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task WeightMismatchAndUnavailableParentDoNotAddInvoiceItems()
+    public async Task KnownIdentityIsAcceptedWhileUnexplainedMassIsPendingAndUnavailableScansAreRejected()
     {
         var session = await StartAsync(new StartSessionRequest(CartId));
         var now = DateTime.UtcNow;
@@ -431,17 +431,17 @@ public sealed class SessionCartIntegrationTests : IAsyncLifetime
             [new(CartItemAction.Enter, "ITEM-1", Confidence: 0.99f)], new(0, 100, true));
         var response = await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", mismatch);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("MOVEMENT_WEIGHT_MISMATCH", (await response.Content.ReadFromJsonAsync<CartMovementResult>())!.Movement.ReasonCode);
+        Assert.Equal("UNIDENTIFIED_WEIGHT", (await response.Content.ReadFromJsonAsync<CartMovementResult>())!.Movement.ReasonCode);
         await _factory.InDatabaseAsync(async db =>
         {
-            Assert.Empty(await db.SessionItems.ToListAsync());
-            Assert.Equal(CartItemOutcome.Unknown, (await db.CartMovementItems.SingleAsync()).Outcome);
+            Assert.Single(await db.SessionItems.ToListAsync());
+            Assert.Equal(CartItemOutcome.Accepted, (await db.CartMovementItems.SingleAsync()).Outcome);
             (await db.Products.SingleAsync()).IsActive = false;
             await db.SaveChangesAsync();
         });
         var unavailable = await _client.PostAsJsonAsync($"/api/cart/{session.SessionId}/movements", CreateScanRequest(session.SessionId) with { Sequence = 2 });
-        Assert.Equal("PRODUCT_UNAVAILABLE", (await unavailable.Content.ReadFromJsonAsync<CartMovementResult>())!.Movement.ReasonCode);
-        Assert.Equal(0, (await _client.GetFromJsonAsync<CartSummaryResponse>($"/api/sessions/{session.SessionId}"))!.TotalMinor);
+        Assert.Equal("PRODUCT_UNAVAILABLE", Assert.Single((await unavailable.Content.ReadFromJsonAsync<CartMovementResult>())!.Movement.Items).ReasonCode);
+        Assert.Equal(100, (await _client.GetFromJsonAsync<CartSummaryResponse>($"/api/sessions/{session.SessionId}"))!.TotalMinor);
     }
     [Fact]
     public async Task SessionRequestValidationIsPreservedAcrossMergedDtos()

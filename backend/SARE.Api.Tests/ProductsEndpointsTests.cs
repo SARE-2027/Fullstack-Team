@@ -34,6 +34,60 @@ public sealed class ProductsEndpointsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ProductToleranceCanOverrideTheDefaultAndReturnToIt()
+    {
+        var category = NewCategory("Tolerance");
+        await _factory.InDatabaseAsync(async context =>
+        {
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
+        });
+        var request = new ProductRequest(category.Id, "منتج", "Product", null);
+        var create = await _client.PostAsJsonAsync(AdminRoute, request);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var product = (await create.Content.ReadFromJsonAsync<ProductResponse>())!;
+        Assert.Null(product.WeightTolerancePercent);
+        Assert.Equal(3m, product.EffectiveWeightTolerancePercent);
+
+        var update = await _client.PutAsJsonAsync($"{AdminRoute}/{product.Id}",
+            request with { WeightTolerancePercent = 7.5m });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var details = (await _client.GetFromJsonAsync<ProductDetailResponse>($"{AdminRoute}/{product.Id}"))!;
+        Assert.Equal(7.5m, details.Product.WeightTolerancePercent);
+        Assert.Equal(7.5m, details.Product.EffectiveWeightTolerancePercent);
+        var page = (await _client.GetFromJsonAsync<PagedResponse<ProductResponse>>(AdminRoute))!;
+        Assert.Equal(7.5m, Assert.Single(page.Items).EffectiveWeightTolerancePercent);
+
+        // صفر نسبة مقصودة، وليست طلبًا للرجوع إلى الإعداد العام.
+        var zero = await _client.PutAsJsonAsync($"{AdminRoute}/{product.Id}", request with { WeightTolerancePercent = 0m });
+        Assert.Equal(0m, (await zero.Content.ReadFromJsonAsync<ProductResponse>())!.EffectiveWeightTolerancePercent);
+        var reset = await _client.PutAsJsonAsync($"{AdminRoute}/{product.Id}", request);
+        var fallback = (await reset.Content.ReadFromJsonAsync<ProductResponse>())!;
+        Assert.Null(fallback.WeightTolerancePercent);
+        Assert.Equal(3m, fallback.EffectiveWeightTolerancePercent);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(100.01)]
+    [InlineData(3.001)]
+    public async Task ProductRejectsInvalidTolerancePercent(double percent)
+    {
+        var category = NewCategory("Tolerance");
+        await _factory.InDatabaseAsync(async context =>
+        {
+            context.Categories.Add(category);
+            await context.SaveChangesAsync();
+        });
+        var request = new ProductRequest(category.Id, "منتج", "Product", null)
+        {
+            WeightTolerancePercent = (decimal)percent
+        };
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsJsonAsync(AdminRoute, request)).StatusCode);
+        await _factory.InDatabaseAsync(async context => Assert.Empty(await context.Products.ToListAsync()));
+    }
+
+    [Fact]
     public async Task AdminCanCreateReadAndReplaceProductIncludingItsCategory()
     {
         var category = NewCategory("Snacks");

@@ -74,12 +74,12 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         });
     }
 
-    public string CreateToken(string role = "admin", bool expired = false, bool invalidSignature = false)
+    public string CreateToken(string role = "admin", bool expired = false, bool invalidSignature = false, string? subject = null)
     {
         role = UserRoles.All.FirstOrDefault(name => string.Equals(name, role, StringComparison.OrdinalIgnoreCase)) ?? role;
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(Issuer, Audience,
-            [new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()), new Claim("role", role)],
+            [new Claim(JwtRegisteredClaimNames.Sub, subject ?? Guid.NewGuid().ToString()), new Claim("role", role)],
             notBefore: now.AddHours(-1), expires: expired ? now.AddMinutes(-1) : now.AddMinutes(10),
             signingCredentials: new SigningCredentials(
                 invalidSignature ? new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32)) : _signingKey,
@@ -118,7 +118,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
                         item.Action, item.DetectedBarcode, item.Source, item.Confidence, item.TargetSessionItemId,
                         item.TrackId, item.CameraId)).ToArray(),
                     movement.HasBasketChange ? new SARE.Application.DTOs.Cart.BasketWeightDto(movement.WeightBeforeG!.Value,
-                        movement.WeightAfterG!.Value, true, movement.WeightToleranceG) : null,
+                        movement.WeightAfterG!.Value, true) : null,
                     true, movement.ModelVersion);
                 await using var winningScope = factory.Services.CreateAsyncScope();
                 await winningScope.ServiceProvider.GetRequiredService<ICartMovementService>()

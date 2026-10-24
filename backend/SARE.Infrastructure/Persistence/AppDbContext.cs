@@ -25,6 +25,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, TimeProvider? 
     public DbSet<CartMovementItem> CartMovementItems => Set<CartMovementItem>();
     public DbSet<CartMovement> CartMovements => Set<CartMovement>();
     public DbSet<CartEventReceipt> CartEventReceipts => Set<CartEventReceipt>();
+    public DbSet<CartBasketAudit> CartBasketAudits => Set<CartBasketAudit>();
+    public DbSet<CartBasketAuditItem> CartBasketAuditItems => Set<CartBasketAuditItem>();
     public DbSet<ShelfEvent> ShelfEvents => Set<ShelfEvent>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 

@@ -115,6 +115,15 @@ public class CartHub(
         return await movementService.ReportAsync(sessionId, request, Context.ConnectionAborted);
     });
 
+    // القرار يخص تقرير خروج ونسخة سيشن محددين، وبنفس تحقق ملكية العربة.
+    public Task<CartMovementResult> ConfirmExitChoice(Guid sessionId, ConfirmExitChoiceRequest request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        return await movementService.ConfirmExitAsync(sessionId, request, Context.ConnectionAborted);
+    });
+
     public Task<CartSummaryResponse> RemoveSessionItem(Guid sessionId, Guid itemId) => ExecuteAsync(async () =>
     {
         var connection = await RequireCartAsync();
@@ -129,11 +138,12 @@ public class CartHub(
         return await movementService.SetRemovalRequestAsync(sessionId, itemId, false, Context.ConnectionAborted);
     });
 
-    [Authorize(Policy = AuthorizationPolicies.Admin)]
-    public Task<CartMovementResult> ReconcileCartBasket(Guid sessionId, ReconcileBasketRequest request) => ExecuteAsync(async () =>
+    public Task<CartMovementResult> RequestStaff(Guid sessionId, CartAuditCommand request) => ExecuteAsync(async () =>
     {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
         if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
-        return await movementService.ReconcileAsync(sessionId, request, Context.ConnectionAborted);
+        return await movementService.RequestStaffAsync(sessionId, request, Context.ConnectionAborted);
     });
 
     public Task<CartSummaryResponse> CloseSession(Guid sessionId) => ExecuteAsync(async () =>

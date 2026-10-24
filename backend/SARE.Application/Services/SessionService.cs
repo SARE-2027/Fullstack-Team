@@ -18,8 +18,7 @@ public class SessionService(
     IUnitOfWork uow,
     IValidator<StartSessionRequest>? startValidator = null,
     IValidator<CloseSessionRequest>? closeValidator = null,
-    IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null,
-    CartMovementProcessor? movementProcessor = null) : ISessionService
+    IValidator<UpdateCartTelemetryRequest>? telemetryValidator = null) : ISessionService
 {
     public Task<IReadOnlyList<CartSummaryResponse>> GetSessionsAsync(CancellationToken ct = default)
     {
@@ -214,10 +213,9 @@ public class SessionService(
         if (session.LastMovementSequence > 0 && session.BasketWeightG.HasValue)
         {
             var snapshot = await GetSessionSummaryAsync(sessionId, ct);
-            var weights = snapshot.Items.Where(item => item.BasketPresence == BasketPresence.Inside)
-                .Select(item => item.ExpectedWeightG);
-            var tolerance = movementProcessor?.Tolerance(weights) ?? 15;
-            if (!snapshot.ExpectedBasketWeightG.HasValue || Math.Abs(session.BasketWeightG.Value - snapshot.ExpectedBasketWeightG.Value) > tolerance)
+            var range = CartWeightPolicy.Sum(snapshot.Items.Where(item => item.BasketPresence == BasketPresence.Inside)
+                .Select(item => CartWeightRange.For(item.ExpectedWeightG, item.WeightTolerancePercent)));
+            if (!snapshot.ExpectedBasketWeightG.HasValue || !range.Contains(session.BasketWeightG.Value))
                 throw new ConflictException("Basket weight is not reconciled.", "BASKET_WEIGHT_MISMATCH");
         }
 

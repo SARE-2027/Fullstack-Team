@@ -47,6 +47,14 @@ public class CartController(
     {
         return Ok(await movements.ReportAsync(sessionId, request, ct));
     }
+    [HttpPost("{sessionId:guid}/exit-confirmation")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public async Task<ActionResult<CartMovementResult>> ConfirmExit(
+        Guid sessionId, [FromBody] ConfirmExitChoiceRequest request, CancellationToken ct)
+    {
+        return Ok(await movements.ConfirmExitAsync(sessionId, request, ct));
+    }
+
     // POST: api/cart/{sessionId}/checkout
     [HttpPost("{sessionId:guid}/checkout")]
     [Authorize(Policy = AuthorizationPolicies.Admin)]

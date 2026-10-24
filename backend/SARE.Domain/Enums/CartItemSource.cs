@@ -4,6 +4,6 @@ public enum CartItemSource
 {
     Vision,
     Scanner,
-    // محفوظ لسجلات الفاتورة القديمة؛ التقارير الجديدة تقبل Vision أو Scanner فقط.
+    // قرارات الحسم على السيرفر والسجلات القديمة؛ الجهاز يرسل Vision أو Scanner فقط.
     Manual
 }

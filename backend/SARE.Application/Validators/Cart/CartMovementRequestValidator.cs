@@ -11,6 +11,7 @@ public sealed class CartMovementRequestValidator : AbstractValidator<CartMovemen
         RuleFor(x => x.EventId).NotEmpty();
         RuleFor(x => x.MovementId).NotEmpty();
         RuleFor(x => x.DeviceBootId).NotEmpty();
+        RuleFor(x => x.AuditId).NotEqual(Guid.Empty).When(x => x.AuditId.HasValue);
         RuleFor(x => x.Sequence).InclusiveBetween(1, int.MaxValue - 1);
         RuleFor(x => x.IsComplete).Equal(true).WithMessage("Send one finished movement after collecting its evidence.");
         RuleFor(x => x.StartedAtUtc).Must(x => x != default && x.Kind == DateTimeKind.Utc);
@@ -39,7 +40,6 @@ public sealed class CartMovementRequestValidator : AbstractValidator<CartMovemen
         {
             RuleFor(x => x.Weight!.BeforeG).InclusiveBetween(0, 1_000_000);
             RuleFor(x => x.Weight!.AfterG).InclusiveBetween(0, 1_000_000);
-            RuleFor(x => x.Weight!.ToleranceG).InclusiveBetween(0, 100);
             RuleFor(x => x.Weight!.IsStable).Equal(true).WithMessage("Wait for stable basket weight before sending a movement.");
         });
         RuleFor(x => x.Weight).NotNull().When(x => x.Items is not null

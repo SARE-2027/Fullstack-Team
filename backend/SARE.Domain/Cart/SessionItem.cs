@@ -9,8 +9,12 @@ public class SessionItem : BaseEntity
     public Guid VariantId { get; set; }
     public int UnitPriceMinor { get; set; }
     public int? ExpectedWeightG { get; set; }
+    // نسبة فعلية وقت الإضافة؛ تغيير المنتج لاحقًا لا يغير سماحية قطعة في فاتورة مفتوحة.
+    public decimal WeightTolerancePercent { get; set; }
     public string Barcode { get; set; } = string.Empty;
     public BasketPresence BasketPresence { get; set; } = BasketPresence.Unconfirmed;
+    // يحدد متى دخلت القطعة فعليًا؛ لا نرشح مشتريات لاحقة لسؤال خروج قديم.
+    public int PlacementSequence { get; set; }
     public DateTime? RemovalRequestedAt { get; set; }
     public string? BasketTrackId { get; set; }
     public string? BasketCameraId { get; set; }

@@ -21,7 +21,9 @@ public enum CartItemEffect
     Added,
     Removed,
     PlacementConfirmed,
-    NoChange
+    NoChange,
+    PendingAdded,
+    PendingRemoved
 }
 
 public enum BasketPresence

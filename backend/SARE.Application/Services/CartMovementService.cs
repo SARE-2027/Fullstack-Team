@@ -10,7 +10,7 @@ using SARE.Domain.Enums;
 
 namespace SARE.Application.Services;
 
-public sealed class CartMovementService(
+public sealed partial class CartMovementService(
     ISessionRepository sessions, ICartMovementRepository repository,
     IProductVariantRepository variants, ISessionService sessionService,
     ICartNotificationService notifications, IValidator<CartMovementRequest> validator,
@@ -36,6 +36,10 @@ public sealed class CartMovementService(
 
         // الحركة الجديدة تحتاج جلسة مفتوحة ورقم الرسالة التالي بالضبط.
         var session = await RequireOpenSessionAsync(sessionId, request.Sequence, ct);
+        // أثناء انتظار الموظف أو الجرد لا تمر الملاحظات بمحاسبة التسوق العادية.
+        if (session.BasketState is BasketState.NeedsStaff or BasketState.Auditing || request.AuditId.HasValue
+            || session.LastAuditCompletedAtUtc.HasValue && request.StartedAtUtc <= session.LastAuditCompletedAtUtc.Value)
+            return await ReportReviewAsync(session, request, payloadHash, ct);
         // نفس الحركة برسالة مختلفة خطأ في العميل؛ لا نحفظها مرة ثانية.
         if (await repository.GetAsync(request.MovementId, ct) is not null)
             // الرفض لا يستهلك sequence ولا يغيّر الفاتورة.
@@ -52,17 +56,14 @@ public sealed class CartMovementService(
         // نحتفظ بإمكانية إخراج قطعة اشتراها العميل حتى لو تغيّر باركودها أو تعطلت في الكتالوج.
         foreach (var item in invoiceItems.Where(item => item.RemovedAt == null && item.ExpectedWeightG.HasValue))
             // هذا البديل يخص قطعة موجودة فقط؛ IsAvailable=false يمنع بيع قطعة جديدة منه.
-            catalog.TryAdd(item.Barcode, new(item.VariantId, item.Barcode, item.UnitPriceMinor, item.ExpectedWeightG!.Value, false));
+            catalog.TryAdd(item.Barcode, new(item.VariantId, item.Barcode, item.UnitPriceMinor, item.ExpectedWeightG!.Value, false)
+                { WeightTolerancePercent = item.WeightTolerancePercent });
 
-        // هذه القائمة تحتوي فقط البنود الجديدة التي سيتم إدخالها في قاعدة البيانات.
-        IReadOnlyList<SessionItem> newInvoiceItems = [];
-        // لو حالة السلة السابقة غير محسومة، لا نفترض أن وزن البداية الحالي صحيح.
-        if (movement.HasBasketChange && await repository.HasUnresolvedBasketMovementAsync(sessionId, ct))
-            // نسجل الحركة للمشرف؛ لا نعيد تشغيل الحركات القديمة تلقائيًا.
-            movement.ReasonCode = "MANUAL_REVIEW_REQUIRED";
-        else
-            // نخطط الحركة كاملة، ونطبقها على الفاتورة فقط إذا اجتازت كل الفحوص.
-            newInvoiceItems = processor.Process(session, movement, invoiceItems, catalog);
+        // نخصم كتلة الخروج المعلق من الوجود الفعلي، مع تأجيل خصم الفاتورة لحسم الطابور.
+        var unresolved = await repository.GetUnresolvedAsync(sessionId, ct);
+        var newInvoiceItems = processor.Process(session, movement, invoiceItems, catalog,
+            unresolved);
+        if (CartExitQueue.IsOpen(movement)) unresolved.Add(movement);
 
         // نسجل أحدث وزن أبلغ عنه الجهاز حتى تظهر المشكلة للمشرف عند الاختلاف.
         if (movement.HasBasketChange)
@@ -70,6 +71,7 @@ public sealed class CartMovementService(
             // هذا وزن مُشاهد، وليس دليلًا أن كل القطع اتقبلت في الفاتورة.
             session.BasketWeightG = movement.WeightAfterG;
         }
+        ResolveExitQueue(session, unresolved, invoiceItems, movement);
         // تسجيل الحركة المقبولة أو المحتاجة مراجعة يستهلك رقم الرسالة مرة واحدة.
         session.LastMovementSequence = request.Sequence;
         // نحسب الإجمالي من البنود النشطة؛ الأسعار القديمة لا تتغير مع الكتالوج.
@@ -85,6 +87,77 @@ public sealed class CartMovementService(
         // الحفظ ذري ثم ننشر السيشن الكاملة للمشتركين.
         return await SaveAndPublishAsync(session, movement, receipt, newInvoiceItems, ct);
     }
+    // القرار يخص خروجًا محفوظًا؛ لا نطلب سكانًا جديدًا ولا نعيد تطبيق التقرير الأصلي.
+    public async Task<CartMovementResult> ConfirmExitAsync(Guid sessionId, ConfirmExitChoiceRequest request, CancellationToken ct = default)
+    {
+        if (request.EventId == Guid.Empty || request.MovementId == Guid.Empty || request.DeviceBootId == Guid.Empty
+            || request.Sequence is < 1 or >= int.MaxValue || string.IsNullOrWhiteSpace(request.ExpectedVersion)
+            || request.SessionItemIds is null || request.SessionItemIds.Count > 500
+            || request.SessionItemIds.Distinct().Count() != request.SessionItemIds.Count)
+            throw new ConflictException("Valid command metadata and distinct invoice IDs are required.", "VALIDATION_FAILED");
+        var hash = Hash(request);
+        var receipt = await repository.GetReceiptAsync(request.EventId, ct);
+        if (receipt is not null) return await ReplayAsync(receipt, sessionId, request.MovementId, hash, ct);
+        var session = await RequireOpenSessionAsync(sessionId, request.Sequence, ct);
+        if (session.LastActivityAt.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) != request.ExpectedVersion)
+            throw new ConflictException("Refresh the session before confirming this choice.", "SESSION_VERSION_CHANGED");
+        if (await repository.GetAsync(request.MovementId, ct) is not null)
+            throw new ConflictException("Retry the original eventId.", "MOVEMENT_ALREADY_RECORDED");
+        var report = await repository.GetAsync(request.PendingMovementId, ct);
+        if (session.BasketState != BasketState.Pending || report is null || report.SessionId != sessionId
+            || report.Status != CartMovementStatus.NeedsConfirmation || !report.UnconfirmedExitWeightG.HasValue)
+            throw new ConflictException("Refresh the pending exit.", "PENDING_MOVEMENT_CHANGED");
+        var unresolved = await repository.GetUnresolvedAsync(sessionId, ct);
+        if (CartExitQueue.First(unresolved)?.Id != report.Id)
+            throw new ConflictException("Answer the oldest exit question first.", "EXIT_ORDER_REQUIRED");
+        var invoice = await repository.GetSessionItemsAsync(sessionId, ct);
+        var selected = invoice.Where(item => request.SessionItemIds.Contains(item.Id)).ToList();
+        if (selected.Count != request.SessionItemIds.Count || selected.Any(item => item.RemovedAt.HasValue
+            || item.BasketPresence != BasketPresence.Inside || !item.ExpectedWeightG.HasValue
+            || item.PlacementSequence > report.Sequence))
+            throw new ConflictException("Select current Inside units from this session.", "INVALID_ITEM_SELECTION");
+
+        var now = DateTime.UtcNow;
+        var decision = new CartMovement
+        {
+            Id = request.MovementId,
+            SessionId = sessionId,
+            Sequence = request.Sequence,
+            DeviceBootId = request.DeviceBootId,
+            StartedAtUtc = now,
+            EndedAtUtc = now,
+            RelatedMovementId = report.Id,
+            ConfirmedByCustomer = false,
+            Status = CartMovementStatus.Accepted,
+            PendingWeightBeforeG = session.PendingWeightG
+        };
+        var selectedRange = CartWeightPolicy.Sum(selected.Select(CartMovementProcessor.UnitRange));
+        var possibleExit = selectedRange + new CartWeightRange(0, report.ExitPendingWeightG > 0
+            ? (long)report.ExitPendingWeightG + report.ExitPendingUncertaintyG : 0);
+        if (request.NeedsStaff || !CartExitQueue.SelectionMatchesIdentification(selected, report)
+            || !CartExitQueue.SelectionLeavesLaterEvidence(invoice, report, selected, unresolved)
+            || !possibleExit.Expand(report.ExitWeightUncertaintyG)
+            .Contains(report.UnconfirmedExitWeightG.Value))
+        {
+            // اختيار متناقض لا يخصم شيئًا، لكنه يُحفظ كطلب مراجعة بدل فقد قرار العميل.
+            session.BasketState = BasketState.NeedsStaff;
+            session.StaffRequestedAt ??= now;
+            session.StaffRequestReason = request.NeedsStaff ? "CUSTOMER_REQUESTED_HELP" : "EXIT_CHOICE_WEIGHT_MISMATCH";
+            decision.ReasonCode = request.NeedsStaff ? "CUSTOMER_REQUESTED_HELP" : "EXIT_CHOICE_WEIGHT_MISMATCH";
+        }
+        else
+        {
+            decision.ConfirmedByCustomer = true;
+            SettleExit(session, report, selected, unresolved, decision, "SETTLED_BY_CUSTOMER");
+            ResolveExitQueue(session, unresolved, invoice, decision, allowUniqueWithPending: true);
+            decision.ReasonCode ??= "SETTLED_BY_CUSTOMER";
+        }
+        session.TotalMinor = checked((int)invoice.Where(item => item.RemovedAt == null).Sum(item => (long)item.UnitPriceMinor));
+        session.LastMovementSequence = request.Sequence;
+        return await SaveAndPublishAsync(session, decision,
+            Receipt(sessionId, decision.Id, request.EventId, request.Sequence, request.DeviceBootId, hash), [], ct);
+    }
+
     public async Task<CartSummaryResponse> SetRemovalRequestAsync(Guid sessionId, Guid itemId, bool requested, CancellationToken ct = default)
     {
         // مرجع الشاشة هو ID بند الفاتورة الذي رجّعه السيرفر سابقًا.
@@ -98,6 +171,8 @@ public sealed class CartMovementService(
             return await sessionService.GetSessionSummaryAsync(sessionId, ct);
         // لا نقبل طلب إزالة جديد لجلسة انتهت.
         if (session.Status != SessionStatus.Open) throw new ConflictException("Session is closed.");
+        if (session.BasketState is BasketState.NeedsStaff or BasketState.Auditing)
+            throw new ConflictException("Basket is under staff review.", "STAFF_REVIEW_ACTIVE");
         // نسجل نية الإزالة فقط؛ الفاتورة تتغير مع الخروج الحقيقي.
         item.RemovalRequestedAt = requested ? DateTime.UtcNow : null;
         // تحديث الجلسة يحدّث Version ويحفظ علامة البند في نفس SaveChanges.
@@ -110,85 +185,38 @@ public sealed class CartMovementService(
         return summary;
     }
 
-    public async Task<CartMovementResult> ReconcileAsync(Guid sessionId, ReconcileBasketRequest request, CancellationToken ct = default)
-    {
-        // الـHub يسمح بهذه العملية للأدمن فقط؛ هنا نتحقق من مدخلات قراره.
-        if (request.EventId == Guid.Empty || request.MovementId == Guid.Empty || request.DeviceBootId == Guid.Empty
-            || request.Sequence is < 1 or >= int.MaxValue
-            || request.StableBasketWeightG is < 0 or > 1_000_000 || request.PendingMovementIds is null)
-            throw new ConflictException("Valid IDs, stable weight and explicit pending movement IDs are required.", "VALIDATION_FAILED");
-        // نفس قرار التسوية يمكن أن يُعاد بسبب انقطاع الشبكة، بدون تنفيذه مرتين.
-        var hash = Hash(request);
-        // نبحث عن نتيجة قرار المشرف المحفوظة قبل التحقق من حالة الجلسة.
-        var existing = await repository.GetReceiptAsync(request.EventId, ct);
-        // الإيصال الموجود يرد بالحالة الحالية ولا يكرر الإشعار.
-        if (existing is not null) return await ReplayAsync(existing, sessionId, request.MovementId, hash, ct);
-        // القرار الجديد يحتاج جلسة مفتوحة وsequence صحيحًا.
-        var session = await RequireOpenSessionAsync(sessionId, request.Sequence, ct);
-        // لا نعيد استخدام معرف حركة سابقة لقرار إداري جديد.
-        if (await repository.GetAsync(request.MovementId, ct) is not null)
-            throw new ConflictException("Use a new movementId for reconciliation.", "MOVEMENT_ID_REUSED");
-        // هنا فقط نقرأ الحركات المعلقة: المشرف يراجعها، ولا نعيد تشغيل معالجتها.
-        var pending = await repository.GetUnresolvedAsync(sessionId, ct);
-        // يجب أن يكون المشرف شاهد نفس قائمة المشاكل الحالية قبل حسمها.
-        if (!pending.Select(x => x.Id).Order().SequenceEqual(request.PendingMovementIds.Distinct().Order()))
-            throw new ConflictException("Refresh and explicitly include every unresolved movement.", "PENDING_MOVEMENTS_CHANGED");
-        // نقرأ الفاتورة المعتمدة بالفعل، وليس تخمينات الحركات غير المقبولة.
-        var items = await repository.GetSessionItemsAsync(sessionId, ct);
-        // القطع الممسوحة والمحمولة خارج السلة لا تدخل في وزنها.
-        var inside = items.Where(x => x.RemovedAt == null && x.BasketPresence == BasketPresence.Inside).ToList();
-        // الحقول المحفوظة تسمح ببيانات تاريخية ناقصة؛ لا نخترع وزنًا لها من الكتالوج الحالي.
-        if (inside.Any(x => !x.ExpectedWeightG.HasValue)) throw new ConflictException("Historical weight snapshots are missing.");
-        // هذا وزن المحتويات المعروفة التي أعادها المشرف للحالة السليمة فعليًا.
-        var expected = inside.Sum(x => (long)x.ExpectedWeightG!.Value);
-        // الوزن وحده لا يحدد الهوية؛ هو تحقق إضافي بعد مراجعة المشرف للقطع.
-        if (Math.Abs(request.StableBasketWeightG - expected) > processor.Tolerance(inside.Select(x => x.ExpectedWeightG)))
-            throw new ConflictException("Restore the known basket contents before reconciliation.", "BASKET_WEIGHT_MISMATCH");
-
-        // نغلق المشاكل التي راجعها المشرف؛ لا نضيف محتوياتها تلقائيًا إلى الفاتورة.
-        foreach (var entry in pending)
-        {
-            CancelUnresolved(entry, "CANCELLED_BY_RECONCILIATION");
-        }
-        // وقت قرار المشرف من ساعة السيرفر.
-        var now = DateTime.UtcNow;
-        // نسجل قرار المشرف كعملية إدارية واضحة، بدون بنود شراء جديدة.
-        var movement = new CartMovement { Id = request.MovementId, SessionId = sessionId,
-            Sequence = request.Sequence, DeviceBootId = request.DeviceBootId,
-            StartedAtUtc = now, EndedAtUtc = now, WeightBeforeG = request.StableBasketWeightG,
-            WeightAfterG = request.StableBasketWeightG,
-            Status = CartMovementStatus.Accepted };
-        // الحالة المشاهدة والمعتمدة أصبحتا نفس الوزن الذي راجعه المشرف.
-        session.BasketWeightG = session.ReconciledBasketWeightG = request.StableBasketWeightG;
-        // قرار المشرف رسالة جديدة في تسلسل الجلسة.
-        session.LastMovementSequence = request.Sequence;
-        // حفظ القرار وإغلاق المشاكل ثم الإشعار في نفس مسار الحفظ المعتاد.
-        return await SaveAndPublishAsync(session, movement,
-            Receipt(sessionId, movement.Id, request.EventId, request.Sequence, request.DeviceBootId, hash), [], ct);
-    }                               
-
     // نبني سجلًا واحدًا من الرسالة النهائية؛ لا يوجد تعديل أو استبدال للحركة.
     private static CartMovement CreateMovement(Guid sessionId, CartMovementRequest request) => new()
     {
         // معرف العملية يأتي من الرسالة، ومعرف الجلسة سبق التحقق من ملكيته في الـHub/HTTP.
-        Id = request.MovementId, SessionId = sessionId, Sequence = request.Sequence,
+        Id = request.MovementId,
+        SessionId = sessionId,
+        Sequence = request.Sequence,
         // بيانات الجهاز والوقت توثق متى شاهد الحركة.
-        DeviceBootId = request.DeviceBootId, StartedAtUtc = request.StartedAtUtc, EndedAtUtc = request.EndedAtUtc,
+        DeviceBootId = request.DeviceBootId,
+        StartedAtUtc = request.StartedAtUtc,
+        EndedAtUtc = request.EndedAtUtc,
         // الوزن يخص السلة كلها؛ السكان وحده لا يحتاج وزنًا.
-        WeightBeforeG = request.Weight?.BeforeG, WeightAfterG = request.Weight?.AfterG,
-        // السماحية النهائية لا يمكن أن تتجاوز إعدادات السيرفر.
-        WeightToleranceG = request.Weight?.ToleranceG ?? 0, HasBasketChange = request.Weight is not null,
+        WeightBeforeG = request.Weight?.BeforeG,
+        WeightAfterG = request.Weight?.AfterG,
+        HasBasketChange = request.Weight is not null,
         // نسخة الموديل معلومة تشخيصية عند إرسالها.
         ModelVersion = request.ModelVersion,
         // نحافظ على ترتيب الملاحظات الأصلي لعرض تقرير الحركة كما أرسله الجهاز.
         Items = request.Items.Select((input, position) => new CartMovementItem
         {
             // هذه IDs قاعدة البيانات؛ السيرفر يولدها، وليس الـPi.
-            Id = Guid.NewGuid(), MovementId = request.MovementId, Position = position,
+            Id = Guid.NewGuid(),
+            MovementId = request.MovementId,
+            Position = position,
             // ننقل الملاحظات الأصلية كما وصلت، ثم نسجل نتيجة التحقق في حقول منفصلة.
-            Action = input.Action, Source = input.Source, DetectedBarcode = input.Barcode,
+            Action = input.Action,
+            Source = input.Source,
+            DetectedBarcode = input.Barcode,
             // الثقة والتتبع يخصان القطعة المرصودة.
-            Confidence = input.Confidence, TrackId = input.TrackId, CameraId = input.CameraId,
+            Confidence = input.Confidence,
+            TrackId = input.TrackId,
+            CameraId = input.CameraId,
             // اختيار بند للإخراج أو إلغاء السكان فقط؛ الدخول والإضافة لا يحملان مراجع بنود.
             TargetSessionItemId = input.SessionItemId
         }).ToList()
@@ -223,6 +251,12 @@ public sealed class CartMovementService(
     private async Task<CartMovementResult> SaveAndPublishAsync(Session session, CartMovement movement,
         CartEventReceipt receipt, IReadOnlyList<SessionItem> additions, CancellationToken ct)
     {
+        movement.PendingWeightAfterG = session.PendingWeightG;
+        if (session.BasketState == BasketState.NeedsStaff)
+        {
+            session.StaffRequestedAt ??= DateTime.UtcNow;
+            session.StaffRequestReason ??= movement.ReasonCode ?? "STAFF_REVIEW_REQUIRED";
+        }
         // الحركة والبنود والفاتورة والإيصال تحفظ معًا؛ لا يظهر للمستخدم نصف عملية.
         if (!await repository.TrySaveAsync(session, movement, receipt, additions, ct))
         {
@@ -288,7 +322,14 @@ public sealed class CartMovementService(
             // وقت نهاية الحركة المكتملة.
             EndedAtUtc = movement.EndedAtUtc,
             // نسخة الموديل للتشخيص عند الحاجة.
-            ModelVersion = movement.ModelVersion
+            ModelVersion = movement.ModelVersion,
+            PendingWeightBeforeG = movement.PendingWeightBeforeG,
+            PendingWeightAfterG = movement.PendingWeightAfterG,
+            UnconfirmedExitWeightG = movement.UnconfirmedExitWeightG,
+            RelatedMovementId = movement.RelatedMovementId,
+            ResolvedByMovementId = movement.ResolvedByMovementId,
+            ConfirmedByCustomer = movement.ConfirmedByCustomer,
+            AuditId = movement.AuditId
         };
     }
 

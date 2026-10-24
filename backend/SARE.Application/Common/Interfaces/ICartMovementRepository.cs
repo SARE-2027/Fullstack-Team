@@ -8,7 +8,8 @@ public interface ICartMovementRepository
     Task<CartMovement?> GetAsync(Guid movementId, CancellationToken ct);
     Task<List<CartMovement>> GetUnresolvedAsync(Guid sessionId, CancellationToken ct);
     Task<List<SessionItem>> GetSessionItemsAsync(Guid sessionId, CancellationToken ct);
-    Task<bool> HasUnresolvedBasketMovementAsync(Guid sessionId, CancellationToken ct);
+    Task<CartBasketAudit?> GetAuditAsync(Guid sessionId, CancellationToken ct);
+    void AddAudit(CartBasketAudit audit);
     Task<bool> TrySaveAsync(Session session, CartMovement movement, CartEventReceipt receipt,
         IReadOnlyList<SessionItem> newItems, CancellationToken ct);
 }

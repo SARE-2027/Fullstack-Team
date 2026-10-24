@@ -31,17 +31,19 @@ the exact positional order used by the client's `invoke` call.
 | JoinCartGroup | cartId (max 32 characters), hardwareToken. | Full open CartSummaryResponse or null. Switching carts unsubscribes the previous one. |
 | StartSession | `{}` or `{ nfcUid: "registered-uid" }`. Optional NFC max 64 characters, must identify an active user. | Full newly opened session. Cart identity comes from the connection. |
 | ReportCartMovement | sessionId, CartMovementRequest. [Exact fields](cart-movements.md). | eventId, nextSequence, movement decisions and full session. Only completed reports with stable physical weights are accepted. |
+| ConfirmExitChoice | sessionId, `{ eventId, movementId, sequence, deviceBootId, pendingMovementId, expectedVersion, sessionItemIds, needsStaff? }`. Set pendingMovementId to session.currentExitMovementId. | Full movement/session result; settles the oldest exit and any uniquely resolved successors. [Rules and examples](cart-movements.md). |
+| RequestStaff | sessionId, CartAuditCommand. | Records a help request, freezes accounting and publishes the full session. [Staff contract](cart-staff-audit.md). |
 | RemoveSessionItem | sessionId, itemId from invoice items. | Full session; removal intent only. |
 | CancelItemRemoval | sessionId, itemId. | Full session; clears removal intent. |
 | UpdateCartTelemetry | `{ batteryPct?, swVersion?, status? }`. Battery 0..100, version max 32, status Active=0/Disabled=1. | cartId, status, batteryPct, nextReportIntervalSeconds, acknowledgedAt. |
-| CloseSession | sessionId. | Full closed session. Unresolved movements/removal requests block closure. |
+| CloseSession | sessionId. | Full closed session. Pending mass, unresolved exits, staff review, missing Inside weights and removal requests block closure. |
 | LeaveCartGroup | cartId. | No result; removes subscriptions and command access for the bound cart. |
 
 RegisterCart is currently open to anonymous callers and does not join the cart.
 An enrollment toggle is deferred. Unprovisioned/invalid credentials cannot read a
 cart's session. Replaced credentials cannot continue issuing commands.
 
-## Admin/dashboard commands
+## Admin/dashboard subscriptions
 
 These use the connection's JWT and do not require a device join. Configure
 `accessTokenFactory` or the client's equivalent.
@@ -50,7 +52,17 @@ These use the connection's JWT and do not require a device join. Configure
 | --- | --- | --- |
 | JoinSessionsGroup | None. | Admin; subscribes to SessionUpdated for all carts. Initial collection: GET /api/sessions. |
 | LeaveSessionsGroup | None. | Admin; unsubscribes from all-session updates. |
-| ReconcileCartBasket | sessionId, `{ eventId, movementId, sequence, deviceBootId, stableBasketWeightG, pendingMovementIds }`. | Admin; explicit recovery after physical review. Returns a full movement result/session. [Recovery rules](cart-movements.md). |
+Administrative mutations use **HTTP endpoints only**. The hub has no administrator
+recount methods, even when connected with an Admin JWT. Admin role
+checks here protect subscription to all sessions; devices need their hardware
+credential and bound session, not a customer JWT or an Admin role.
+
+For administrative operations under `/api/v1/admin/sessions/{sessionId}`, use
+`POST audit/start`, `audit/remove-item`, `audit/commit`,
+and `staff-request`. Exact bodies, scanner routing
+and approval procedure: [cart-staff-audit.md](cart-staff-audit.md).
+They publish the same SessionUpdated after saving. Device audit reports add
+`auditId` to the usual CartMovementRequest.
 
 ## Reply versus event
 
@@ -83,7 +95,12 @@ not HTTP status responses. Examples: CART_NOT_JOINED, INVALID_CART_TOKEN,
 SESSION_NOT_ACCESSIBLE, VALIDATION_FAILED, EVENT_ID_REUSED,
 MOVEMENT_ALREADY_RECORDED and SEQUENCE_GAP.
 
-Persist/retry the exact original request after lost acknowledgements. Unresolved movements require supervisor recovery; the device cannot submit corrections. Replay returns
+Persist/retry the exact original request after lost acknowledgements. Shopping continues
+while exit questions queue in Sequence order; the UI shows only currentExitMovementId
+with its exitChoices. Answering a later exit fails with EXIT_ORDER_REQUIRED. One
+answer may settle several subsequent reports, so replace the whole returned session
+and present the new head rather than advancing a local question index. Impossible
+cases use staff recovery. No clarification-scan command exists; the device cannot rewrite old reports. Replay returns
 current session state, including after closure, without broadcasting again.
 Start/close have no event IDs; after a lost reply, join/read to discover their result.
 
@@ -100,4 +117,6 @@ Notifications are best effort with snapshot recovery, not a durable replay log.
 
 One open session per cart is enforced by the filtered ux_sessions_open_cart index,
 including concurrent start requests. Apply migrations through
-SimplifyCartMovementProcessing before using the new protocol; see the movement guide.
+AddCartPendingFlow, AddCartWeightToleranceAndStaffAudit and AddCartExitQueue before using the new
+protocol; see the movement guide. These are required schema changes, not applied
+automatically by documentation or migration generation.

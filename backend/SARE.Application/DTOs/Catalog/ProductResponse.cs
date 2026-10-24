@@ -7,6 +7,9 @@ public sealed record ProductResponse(
     bool IsActive, DateTime UpdatedAt, string CategoryNameAr, string CategoryNameEn,
     int VariantCount, int ActiveVariantCount)
 {
+    public decimal? WeightTolerancePercent { get; init; }
+    public decimal EffectiveWeightTolerancePercent { get; init; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<ProductOptionResponse>? Options { get; init; }
 }

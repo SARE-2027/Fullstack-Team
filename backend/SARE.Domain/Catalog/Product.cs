@@ -8,6 +8,8 @@ public class Product : BaseEntity
     public string NameAr { get; set; } = string.Empty;
     public string NameEn { get; set; } = string.Empty;
     public string? ImageUrl { get; set; }
+    // null يستخدم النسبة العامة؛ الوزن نفسه يظل لكل Variant.
+    public decimal? WeightTolerancePercent { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime UpdatedAt { get; set; }
 

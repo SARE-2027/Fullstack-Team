@@ -24,12 +24,14 @@ public sealed class CartMovementItemConfiguration : IEntityTypeConfiguration<Car
             table.HasCheckConstraint("ck_cart_movement_items_outcome", "outcome IN ('accepted', 'corrected', 'rejected', 'unknown')");
             table.HasCheckConstraint("ck_cart_movement_items_confidence", "confidence IS NULL OR confidence BETWEEN 0 AND 1");
             table.HasCheckConstraint("ck_cart_movement_items_action", "action IN ('scan','enter','exit','cancel_scan')");
-            table.HasCheckConstraint("ck_cart_movement_items_effect", "effect IN ('none','added','removed','placement_confirmed','no_change')");
+            table.HasCheckConstraint("ck_cart_movement_items_effect", "effect IN ('none','added','removed','placement_confirmed','no_change','pending_added','pending_removed')");
             table.HasCheckConstraint("ck_cart_movement_items_snapshot", "(expected_weight_g IS NULL OR expected_weight_g > 0) AND (unit_price_minor IS NULL OR unit_price_minor >= 0)");
+            table.HasCheckConstraint("ck_cart_movement_items_weight_tolerance_percent", "weight_tolerance_percent BETWEEN 0 AND 100");
             table.HasCheckConstraint("ck_cart_movement_items_position", "position >= 0");
         });
 
         builder.Property(item => item.Id).ValueGeneratedNever();
+        builder.Property(item => item.WeightTolerancePercent).HasColumnType("numeric(5,2)");
         builder.Property(item => item.DetectedBarcode).HasMaxLength(64);
         builder.Property(item => item.CreatedAt).HasDefaultValueSql("now()");
         builder.Property(item => item.Source)

@@ -29,7 +29,7 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
             db.Carts.AddRange(new Cart { Id = "CART", TokenHash = TokenHasher.HashToken(Token) },
                 new Cart { Id = "OTHER", TokenHash = TokenHasher.HashToken(Token) });
             var category = new Category { Id = Guid.NewGuid(), NameAr = "تصنيف", NameEn = "Category" };
-            var product = new Product { Id = Guid.NewGuid(), CategoryId = category.Id, NameAr = "منتج", NameEn = "Product" };
+            var product = new Product { Id = Guid.NewGuid(), CategoryId = category.Id, NameAr = "منتج", NameEn = "Product", WeightTolerancePercent = 0m };
             db.Categories.Add(category); db.Products.Add(product);
             foreach (var (barcode, weight, price) in new[] { ("A", 50, 100), ("B", 100, 250), ("C", 50, 200) })
                 db.ProductVariants.Add(new ProductVariant { Id = Guid.NewGuid(), ProductId = product.Id,
@@ -194,20 +194,19 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
         Assert.Equal(300, result.Session.TotalMinor);
     }
     [Fact]
-    public async Task FailedWeightDoesNotConsumeAutomaticPlacementOrBillMixedScans()
+    public async Task RecognizedPlacementAndScanAreAcceptedWhileOnlyUnexplainedMassIsPending()
     {
         var scan = await SendAsync([Scan("A")]);
         var result = await SendAsync([Enter("A"), Scan("B")], new(0, 90, true));
-        Assert.Equal("MOVEMENT_WEIGHT_MISMATCH", result.Movement.ReasonCode);
-        Assert.Equal(100, result.Session.TotalMinor);
-        Assert.Equal(BasketPresence.Unconfirmed, Assert.Single(result.Session.Items).BasketPresence);
-        Assert.All(result.Movement.Items, item => Assert.Equal("Unknown", item.Outcome));
-        await RecoverAsync(0);
-        var retried = await SendAsync([Enter("A")], new(0, 50, true));
-        Assert.Equal("Accepted", retried.Movement.Status);
-        Assert.Equal(scan.Session.Items[0].Id, Assert.Single(retried.Session.Items).Id);
-        Assert.Equal(100, retried.Session.TotalMinor);
+        Assert.Equal("UNIDENTIFIED_WEIGHT", result.Movement.ReasonCode);
+        Assert.Equal(40, result.Session.PendingWeightG);
+        Assert.Equal(350, result.Session.TotalMinor);
+        Assert.Equal(scan.Session.Items[0].Id, result.Movement.Items[0].SessionItemId);
+        Assert.Equal(BasketPresence.Inside, result.Session.Items.Single(item => item.Barcode == "A").BasketPresence);
+        Assert.All(result.Movement.Items, item => Assert.Equal("Accepted", item.Outcome));
+        Assert.False(result.Session.CanCheckout);
     }
+
     [Fact]
     public async Task SamePacketScansArePairedInTheirOriginalInputOrder()
     {
@@ -261,14 +260,14 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
     [InlineData(null, 0.99f, "ITEM_NOT_IDENTIFIED")]
     [InlineData("UNKNOWN", 0.99f, "UNKNOWN_BARCODE")]
     [InlineData("A", 0.4f, "LOW_CONFIDENCE")]
-    public async Task UnidentifiedMovementWaitsForSupervisor(string? barcode, float confidence, string reason)
+    public async Task StaffRecountClearsAnUnidentifiedEntryWithoutReplayingItsEvidence(string? barcode, float confidence, string reason)
     {
-        var request = Request([Enter(barcode) with { Confidence = confidence }], new(0, 50, true));
+        var request = Request([Enter(barcode) with { Confidence = confidence }], new(0, reason == "LOW_CONFIDENCE" ? 90 : 50, true));
         var pending = await SendAsync(request);
         Assert.Equal(reason, pending.Movement.ReasonCode);
         Assert.Empty(pending.Session.Items);
         Assert.Single(pending.Session.PendingMovements[0].Items);
-        Assert.Empty((await RecoverAsync(0)).Session.PendingMovements);
+        Assert.Empty((await RecoverAsync()).Session.PendingMovements);
         await _factory.InDatabaseAsync(async db =>
         {
             var original = await db.CartMovementItems.SingleAsync();
@@ -287,47 +286,56 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
         var changed = request with { EventId = Guid.NewGuid(), Sequence = ++_sequence, Weight = new(0, 50, true) };
         Assert.Contains("MOVEMENT_ALREADY_RECORDED", (await ErrorAsync(changed)).Message);
         _sequence--;
-        await RecoverAsync(0);
-        Assert.Equal(100, (await SendAsync([Enter("A")], new(0, 50, true))).Session.TotalMinor);
+        await RecoverAsync();
+        Assert.Equal(200, (await SendAsync([Enter("A")], new(50, 100, true))).Session.TotalMinor);
     }
     [Fact]
-    public async Task OldReportsAreNeverReprocessedAndLaterPhysicalReportsNeedManualReview()
+    public async Task OldUnknownReportsAreNotReplayedWhileNewKnownShoppingContinues()
     {
         var original = Request([Enter(null)], new(0, 50, true));
         await SendAsync(original);
         var later = await SendAsync([Enter("B")], new(50, 150, true));
-        Assert.Equal("MANUAL_REVIEW_REQUIRED", later.Movement.ReasonCode);
-        Assert.Empty(later.Session.Items);
-        Assert.Equal(2, later.Session.PendingMovements.Count);
+        Assert.Equal("Accepted", later.Movement.Status);
+        Assert.Equal("B", Assert.Single(later.Session.Items).Barcode);
+        Assert.Equal(50, later.Session.PendingWeightG);
+        Assert.Single(later.Session.PendingMovements);
         var scanned = await SendAsync([Scan("C")]);
-        Assert.Equal(200, scanned.Session.TotalMinor);
-        Assert.Equal(2, scanned.Session.PendingMovements.Count);
-        var recovered = await RecoverAsync(0);
-        Assert.Equal(200, recovered.Session.TotalMinor);
+        Assert.Equal(450, scanned.Session.TotalMinor);
+        Assert.Single(scanned.Session.PendingMovements);
+        var recovered = await RecoverAsync();
+        Assert.Equal(450, recovered.Session.TotalMinor);
         Assert.Empty(recovered.Session.PendingMovements);
-        Assert.Equal(450, (await SendAsync([Enter("B")], new(0, 100, true))).Session.TotalMinor);
+        Assert.Equal(700, (await SendAsync([Enter("B")], new(150, 250, true))).Session.TotalMinor);
         Assert.Equal("Cancelled", (await SendAsync(original)).Movement.Status);
     }
+
     [Fact]
-    public async Task UnknownPhysicalPieceKeepsWholeMixedMovementOffInvoice()
+    public async Task UnknownPhysicalMassDoesNotCancelTheIndependentScannerPurchase()
     {
         var result = await SendAsync([Scan("B"), Enter(null)], new(0, 50, true));
         Assert.Equal("NeedsConfirmation", result.Movement.Status);
-        Assert.Equal(0, result.Session.TotalMinor);
-        Assert.Empty(result.Session.Items);
-        Assert.All(result.Movement.Items, item => Assert.Equal("Unknown", item.Outcome));
+        Assert.Equal(50, result.Session.PendingWeightG);
+        Assert.Equal(250, result.Session.TotalMinor);
+        Assert.Equal(BasketPresence.Unconfirmed, Assert.Single(result.Session.Items).BasketPresence);
+        Assert.Equal("Accepted", result.Movement.Items[0].Outcome);
+        Assert.Equal("Unknown", result.Movement.Items[1].Outcome);
     }
+
     [Fact]
-    public async Task BadWeightDoesNotPartiallyApplyScansEntriesOrExits()
+    public async Task ContradictoryBasketMassDoesNotDiscardTheRecognizedItemDecisions()
     {
         await SendAsync([Enter("A")], new(0, 50, true));
-        var result = await SendAsync([Scan("C"), Exit("A"), Enter("B")], new(50, 70, true, 100));
-        Assert.Equal("MOVEMENT_WEIGHT_MISMATCH", result.Movement.ReasonCode);
-        Assert.Equal(100, result.Session.TotalMinor);
-        Assert.Equal("A", Assert.Single(result.Session.Items).Barcode);
-        Assert.All(result.Movement.Items, item => Assert.Equal("Unknown", item.Outcome));
+        var result = await SendAsync([Scan("C"), Exit("A"), Enter("B")], new(50, 70, true));
+        // بعد الأجزاء المعروفة يبقى خروج 30g لا يطابق محتويات الفاتورة؛ المراجعة لا تلغي القرارات المستقلة.
+        Assert.Equal("NO_EXIT_MATCH", result.Movement.ReasonCode);
+        Assert.Equal(BasketState.NeedsStaff, result.Session.BasketState);
+        Assert.Equal(450, result.Session.TotalMinor);
+        Assert.DoesNotContain(result.Session.Items, item => item.Barcode == "A");
+        Assert.All(result.Movement.Items, item => Assert.Equal("Accepted", item.Outcome));
+        Assert.Equal(BasketState.NeedsStaff, result.Session.BasketState);
         await Assert.ThrowsAsync<HubException>(() => _cart.InvokeAsync<CartSummaryResponse>("CloseSession", _sessionId));
     }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -366,15 +374,21 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
         Assert.Equal(0, (await SendAsync([Exit("A")], new(50, 0, true))).Session.TotalMinor);
     }
     [Fact]
-    public async Task DifferentPricesRequireExplicitExitSelection()
+    public async Task KnownExitUsesTheOldestPurchaseSnapshotWhenPricesDiffer()
     {
         var first = await SendAsync([Enter("A")], new(0, 50, true));
-        await _factory.InDatabaseAsync(async db => { (await db.ProductVariants.SingleAsync(item => item.Barcode == "A")).PriceMinor = 200; await db.SaveChangesAsync(); });
+        await _factory.InDatabaseAsync(async db =>
+        {
+            (await db.ProductVariants.SingleAsync(item => item.Barcode == "A")).PriceMinor = 200;
+            await db.SaveChangesAsync();
+        });
         await SendAsync([Enter("A")], new(50, 100, true));
-        Assert.Equal("SELECT_SESSION_ITEM", (await SendAsync([Exit("A")], new(100, 50, true))).Movement.ReasonCode);
-        await RecoverAsync(100);
-        Assert.Equal(200, (await SendAsync([Exit("A") with { SessionItemId = first.Session.Items[0].Id }], new(100, 50, true))).Session.TotalMinor);
+        var result = await SendAsync([Exit("A")], new(100, 50, true));
+        Assert.Equal("Accepted", result.Movement.Status);
+        Assert.Equal(first.Session.Items[0].Id, result.Movement.Items[0].SessionItemId);
+        Assert.Equal(200, result.Session.TotalMinor);
     }
+
     [Fact]
     public async Task HeldScanCanBeCancelledButPlacedUnitRequiresExit()
     {
@@ -384,9 +398,9 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
         var result = await SendAsync([Scan("B") with { Action = CartItemAction.CancelScan, SessionItemId = entered.Session.Items[0].Id }]);
         Assert.Equal("PHYSICAL_EXIT_REQUIRED", result.Movement.ReasonCode);
         Assert.Equal(250, result.Session.TotalMinor);
+        Assert.Equal(250, (await SendAsync([Exit("B")], new(100, 0, true))).Session.TotalMinor);
+        await RecoverAsync();
         Assert.Equal(0, (await SendAsync([Exit("B")], new(100, 0, true))).Session.TotalMinor);
-        Assert.Single((await SnapshotAsync()).PendingMovements);
-        await RecoverAsync(0);
     }
     [Fact]
     public async Task ExitAndCancellationInSamePacketCannotSubtractTwice()
@@ -484,27 +498,33 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
         });
     }
     [Fact]
-    public async Task RecoveryRequiresAdminExactPendingIdsAndRestoredWeight()
+    public async Task RecoveryUsesAdminAuditAndLegacyReconciliationIsNotExposed()
     {
         var pending = await SendAsync([Enter(null)], new(0, 50, true));
-        var request = new ReconcileBasketRequest(Guid.NewGuid(), Guid.NewGuid(), ++_sequence, _boot, 0, [pending.Movement.MovementId]);
+        var request = new CartAuditCommand(Guid.NewGuid(), Guid.NewGuid(), _sequence + 1, _boot, pending.Session.Version);
         await Assert.ThrowsAsync<HubException>(() => _cart.InvokeAsync<CartMovementResult>("ReconcileCartBasket", _sessionId, request));
-        await using var admin = await ConnectAsync(admin: true);
-        await Assert.ThrowsAsync<HubException>(() => admin.InvokeAsync<CartMovementResult>("ReconcileCartBasket", _sessionId, request with { PendingMovementIds = [] }));
-        await Assert.ThrowsAsync<HubException>(() => admin.InvokeAsync<CartMovementResult>("ReconcileCartBasket", _sessionId, request with { StableBasketWeightG = 50 }));
-        Assert.Empty((await admin.InvokeAsync<CartMovementResult>("ReconcileCartBasket", _sessionId, request)).Session.PendingMovements);
+        using var admin = _factory.CreateClient();
+        var route = $"/api/v1/admin/sessions/{_sessionId}/audit/start";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await admin.PostAsJsonAsync(route, request)).StatusCode);
+        admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken("staff"));
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsJsonAsync(route, request)).StatusCode);
+        admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken());
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync(route, request)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsJsonAsync(
+            $"/api/v1/admin/sessions/{_sessionId}/basket/reconcile", request)).StatusCode);
+        Assert.Empty((await RecoverAsync()).Session.PendingMovements);
         Assert.Equal("closed", (await _cart.InvokeAsync<CartSummaryResponse>("CloseSession", _sessionId)).Status);
     }
     [Fact]
-    public async Task TinyItemCannotDisappearInsideSensorTolerance()
+    public async Task IdentifiedTinyEntryRequiresAPhysicalWeightChange()
     {
-        await _factory.InDatabaseAsync(async db => { (await db.ProductVariants.SingleAsync(item => item.Barcode == "A")).WeightG = 5; await db.SaveChangesAsync(); });
+        await _factory.InDatabaseAsync(async db => { var variant = await db.ProductVariants.SingleAsync(item => item.Barcode == "A"); variant.WeightG = 5; await db.SaveChangesAsync(); });
         Assert.Equal("MOVEMENT_WEIGHT_MISMATCH", (await SendAsync([Enter("A")], new(0, 0, true))).Movement.ReasonCode);
     }
     [Fact]
-    public async Task TinyPreviouslyScannedUnitAlsoCapsPlacementTolerance()
+    public async Task ScannedTinyUnitStillRequiresAPhysicalPlacement()
     {
-        await _factory.InDatabaseAsync(async db => { (await db.ProductVariants.SingleAsync(item => item.Barcode == "A")).WeightG = 5; await db.SaveChangesAsync(); });
+        await _factory.InDatabaseAsync(async db => { var variant = await db.ProductVariants.SingleAsync(item => item.Barcode == "A"); variant.WeightG = 5; await db.SaveChangesAsync(); });
         await SendAsync([Scan("A")]);
         Assert.Equal("MOVEMENT_WEIGHT_MISMATCH", (await SendAsync([Enter("A")], new(0, 0, true))).Movement.ReasonCode);
     }
@@ -537,10 +557,11 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
     public async Task MissingStoredInvoiceWeightIsReportedAtPhysicalCalculation()
     {
         await SendAsync([Enter("A")], new(0, 50, true));
-        await _factory.InDatabaseAsync(async db => { (await db.SessionItems.SingleAsync()).ExpectedWeightG = null; await db.SaveChangesAsync(); });
+        await _factory.InDatabaseAsync(async db => { var unit = await db.SessionItems.SingleAsync(); unit.ExpectedWeightG = null; await db.SaveChangesAsync(); });
         var result = await SendAsync([Enter("B")], new(50, 150, true));
         Assert.Equal("WEIGHT_SNAPSHOT_MISSING", result.Movement.ReasonCode);
-        Assert.Equal(100, result.Session.TotalMinor); Assert.Single(result.Session.Items);
+        Assert.Equal(350, result.Session.TotalMinor); Assert.Equal(2, result.Session.Items.Count);
+        Assert.False(result.Session.CanCheckout);
     }
     [Fact]
     public async Task TotalOverflowRollsBackAllChargesAndReceipt()
@@ -587,11 +608,31 @@ public sealed class CartMovementProcessingTests : IAsyncLifetime
     private static CartMovementItemRequest Scan(string barcode) => new(CartItemAction.Scan, barcode, CartItemSource.Scanner);
     private static CartMovementItemRequest Enter(string? barcode) => new(CartItemAction.Enter, barcode, Confidence: 0.95f);
     private static CartMovementItemRequest Exit(string barcode) => Enter(barcode) with { Action = CartItemAction.Exit };
-    private async Task<CartMovementResult> RecoverAsync(int restoredWeight)
+    private async Task<CartMovementResult> RecoverAsync()
     {
-        var snapshot = await SnapshotAsync(); await using var admin = await ConnectAsync(admin: true);
-        return await admin.InvokeAsync<CartMovementResult>("ReconcileCartBasket", _sessionId,
-            new ReconcileBasketRequest(Guid.NewGuid(), Guid.NewGuid(), ++_sequence, _boot, restoredWeight, snapshot.PendingMovements.Select(item => item.MovementId).ToList()));
+        var purchases = (await SnapshotAsync()).Items;
+        using var admin = _factory.CreateClient();
+        admin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken());
+        async Task<CartAuditCommand> CommandAsync(Guid? auditId = null)
+        {
+            var snapshot = await SnapshotAsync();
+            _sequence = snapshot.LastMovementSequence + 1;
+            return new(Guid.NewGuid(), Guid.NewGuid(), _sequence, _boot, snapshot.Version) { AuditId = auditId };
+        }
+        async Task<CartMovementResult> AdminAsync(string action, Guid? auditId = null)
+        {
+            var response = await admin.PostAsJsonAsync($"/api/v1/admin/sessions/{_sessionId}/audit/{action}", await CommandAsync(auditId));
+            response.EnsureSuccessStatusCode();
+            return (await response.Content.ReadFromJsonAsync<CartMovementResult>())!;
+        }
+
+        await _cart.InvokeAsync<CartMovementResult>("RequestStaff", _sessionId, await CommandAsync());
+        var audit = (await AdminAsync("start")).Session.Audit!.Id;
+        if (purchases.Count > 0)
+            await SendAsync(Request(purchases.Select(item => Scan(item.Barcode)).ToList()) with { AuditId = audit });
+        var weight = purchases.Sum(item => item.ExpectedWeightG!.Value);
+        await SendAsync(Request([], new(0, weight, true)) with { AuditId = audit });
+        return await AdminAsync("commit", audit);
     }
     private async Task<HubConnection> ConnectAsync(string cartId = "CART", bool admin = false)
     {

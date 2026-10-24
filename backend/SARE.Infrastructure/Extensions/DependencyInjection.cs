@@ -43,7 +43,9 @@ public static class DependencyInjection
         services.AddScoped<ICartMovementRepository, CartMovementRepository>();
         services.AddOptions<SARE.Application.Common.CartMovementOptions>()
             .Bind(configuration.GetSection("CartMovement"))
-            .Validate(x => x.MinimumVisionConfidence is > 0 and <= 1 && x.WeightToleranceGrams is >= 0 and <= 100,
+            .Validate(x => x.MinimumVisionConfidence is > 0 and <= 1
+                && x.DefaultWeightTolerancePercent is >= 0 and <= 100
+                && decimal.Round(x.DefaultWeightTolerancePercent, 2) == x.DefaultWeightTolerancePercent,
                 "Invalid movement thresholds.").ValidateOnStart();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();

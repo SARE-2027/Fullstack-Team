@@ -18,4 +18,5 @@ public record SessionItemDto(
 {
     public SARE.Domain.Enums.BasketPresence BasketPresence { get; init; }
     public DateTime? RemovalRequestedAt { get; init; }
+    public decimal WeightTolerancePercent { get; init; }
 }

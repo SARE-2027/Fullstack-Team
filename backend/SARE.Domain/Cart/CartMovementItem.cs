@@ -11,6 +11,7 @@ public class CartMovementItem : BaseEntity
     public CartItemEffect Effect { get; set; }
     public Guid? VariantId { get; set; }
     public int? ExpectedWeightG { get; set; }
+    public decimal WeightTolerancePercent { get; set; }
     public int? UnitPriceMinor { get; set; }
     public Guid? SessionItemId { get; set; }
     public Guid? TargetSessionItemId { get; set; }
