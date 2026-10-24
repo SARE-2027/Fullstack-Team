@@ -129,6 +129,32 @@ public sealed class CartPendingFlowTests : IAsyncLifetime
         Assert.Equal(BasketState.Pending, result.Session.BasketState);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task MissingOrMergedUnknownObservationsDoNotChangePendingMassOrInterruptKnownItemsAndScanPlacement(
+        int unknownObservations)
+    {
+        var observations = new List<CartMovementItemRequest> { Scan("D"), Enter("A") };
+        observations.AddRange(Enumerable.Range(0, unknownObservations).Select(_ => Enter(null)));
+        var result = await ReportAsync(observations, new(0, 300, true));
+        Assert.Equal(200, result.Session.PendingWeightG);
+        Assert.Equal(2500, result.Session.TotalMinor);
+        Assert.Equal(2, result.Session.Items.Count);
+        Assert.Equal(BasketPresence.Unconfirmed, result.Session.Items.Single(item => item.Barcode == "D").BasketPresence);
+        var heldId = result.Session.Items.Single(item => item.Barcode == "D").Id;
+
+        var knownEntry = await ReportAsync([Enter("B")], new(300, 500, true));
+        Assert.Equal(200, knownEntry.Session.PendingWeightG);
+        var placed = await ReportAsync([Enter("D")], new(500, 600, true));
+        Assert.Equal(4500, placed.Session.TotalMinor);
+        Assert.Equal(200, placed.Session.PendingWeightG);
+        Assert.Equal(BasketPresence.Inside, placed.Session.Items.Single(item => item.Id == heldId).BasketPresence);
+        Assert.Equal(3, placed.Session.Items.Count);
+        Assert.Equal(BasketState.Pending, placed.Session.BasketState);
+    }
+
     [Fact]
     public async Task ReturningUnknownContentsThenScanningIsAnOrdinaryNewPurchase()
     {
@@ -219,6 +245,183 @@ public sealed class CartPendingFlowTests : IAsyncLifetime
         Assert.Equal(invoiceUnitLeft ? 0 : 1000, result.Session.TotalMinor);
         Assert.Equal(invoiceUnitLeft ? 100 : 0, result.Session.PendingWeightG);
         Assert.Equal(!invoiceUnitLeft, result.Session.CanCheckout);
+    }
+
+    [Fact]
+    public async Task KnownExitLargerThanPendingRemovesItsInvoiceUnitWithoutOfferingEqualWeightAlternatives()
+    {
+        var original = await ReportAsync([Enter("A"), Enter("B"), Enter("C")], new(0, 600, true));
+        await ReportAsync([Enter(null)], new(600, 700, true));
+        var request = await RequestAsync([Exit("C")], new(700, 400, true));
+        var result = await SendAsync(request);
+        Assert.Equal(3000, result.Session.TotalMinor);
+        Assert.Equal(100, result.Session.PendingWeightG);
+        Assert.DoesNotContain(result.Session.Items, item => item.Barcode == "C");
+        Assert.Contains(result.Session.Items, item => item.Id == original.Session.Items.Single(unit => unit.Barcode == "A").Id);
+        Assert.Contains(result.Session.Items, item => item.Id == original.Session.Items.Single(unit => unit.Barcode == "B").Id);
+        Assert.Empty(result.Session.ExitChoices);
+        Assert.Null(result.Session.CurrentExitMovementId);
+        var retry = await SendAsync(request);
+        Assert.Equal(result.Session.TotalMinor, retry.Session.TotalMinor);
+        Assert.Equal(result.Session.Version, retry.Session.Version);
+    }
+
+    [Fact]
+    public async Task KnownExitLargerThanPendingUsesTheOldestPurchaseWhenItsSkuHasDifferentPrices()
+    {
+        var original = await ReportAsync([Enter("B")], new(0, 200, true));
+        await _factory.InDatabaseAsync(async db =>
+        {
+            (await db.ProductVariants.SingleAsync(item => item.Barcode == "B")).PriceMinor = 3000;
+            await db.SaveChangesAsync();
+        });
+        var newer = await ReportAsync([Enter("B")], new(200, 400, true));
+        await ReportAsync([Enter(null)], new(400, 450, true));
+        var result = await ReportAsync([Exit("B")], new(450, 250, true));
+        Assert.Equal(3000, result.Session.TotalMinor);
+        Assert.DoesNotContain(result.Session.Items, item => item.Id == original.Session.Items[0].Id);
+        Assert.Equal(newer.Session.Items.Single(item => item.UnitPriceMinor == 3000).Id, Assert.Single(result.Session.Items).Id);
+        Assert.Equal(50, result.Session.PendingWeightG);
+        Assert.Null(result.Session.CurrentExitMovementId);
+    }
+
+    [Fact]
+    public async Task KnownExitWithinPendingOffersOnlyItsMatchingInvoiceUnitOrPending()
+    {
+        var original = await ReportAsync([Enter("A"), Enter("D"), Enter("E")], new(0, 260, true));
+        await ReportAsync([Enter(null)], new(260, 460, true));
+        var result = await ReportAsync([Exit("A")], new(460, 360, true));
+        var a = original.Session.Items.Single(item => item.Barcode == "A").Id;
+        Assert.Equal(2, result.Session.ExitChoices.Count);
+        Assert.Contains(result.Session.ExitChoices, choice => choice.SessionItemIds.Count == 0 && choice.PendingWeightG == 100);
+        Assert.Contains(result.Session.ExitChoices, choice => choice.SessionItemIds.SequenceEqual(new[] { a }) && choice.PendingWeightG == 0);
+        var rejoined = await SnapshotAsync();
+        Assert.All(rejoined.ExitChoices, choice => Assert.All(choice.SessionItemIds, id => Assert.Equal(a, id)));
+        Assert.Equal(result.Movement.MovementId, rejoined.CurrentExitMovementId);
+    }
+
+    [Theory]
+    [InlineData("D")]
+    [InlineData("E")]
+    public async Task CustomerCannotReplaceAKnownPendingExitWithAnUnrelatedWeightCompatibleItem(string barcode)
+    {
+        var original = await ReportAsync([Enter("A"), Enter("D"), Enter("E")], new(0, 260, true));
+        await ReportAsync([Enter(null)], new(260, 460, true));
+        var exit = await ReportAsync([Exit("A")], new(460, 360, true));
+        var result = await _cart.InvokeAsync<CartMovementResult>("ConfirmExitChoice", _session,
+            await ChoiceAsync(exit.Movement.MovementId, [original.Session.Items.Single(item => item.Barcode == barcode).Id]));
+        Assert.Equal(BasketState.NeedsStaff, result.Session.BasketState);
+        Assert.Equal(3100, result.Session.TotalMinor);
+        Assert.Equal(200, result.Session.PendingWeightG);
+        Assert.False(result.Movement.ConfirmedByCustomer);
+    }
+
+    [Fact]
+    public async Task PendingUncertaintyStillRequiresAChoiceWhenItCanCoverTheKnownExit()
+    {
+        await _factory.InDatabaseAsync(async db =>
+        {
+            (await db.Products.SingleAsync()).WeightTolerancePercent = 10m;
+            await db.SaveChangesAsync();
+        });
+        await ReportAsync([Enter("A"), Enter(null)], new(0, 190, true));
+        var result = await ReportAsync([Exit("A")], new(190, 90, true));
+        Assert.Equal(90, result.Session.PendingWeightG);
+        Assert.Equal(10, result.Session.PendingWeightUncertaintyG);
+        Assert.Equal(1000, result.Session.TotalMinor);
+        Assert.Equal(2, result.Session.ExitChoices.Count);
+        Assert.NotNull(result.Session.CurrentExitMovementId);
+    }
+
+    [Fact]
+    public async Task MatchingKnownExitDoesNotConsumePendingForPackageVariationInsideTolerance()
+    {
+        await _factory.InDatabaseAsync(async db =>
+        {
+            (await db.Products.SingleAsync()).WeightTolerancePercent = 3m;
+            await db.SaveChangesAsync();
+        });
+        await ReportAsync([Enter("C")], new(0, 309, true));
+        await ReportAsync([Enter(null)], new(309, 409, true));
+        var result = await ReportAsync([Exit("C")], new(409, 100, true));
+        Assert.Equal(0, result.Session.TotalMinor);
+        Assert.Equal(100, result.Session.PendingWeightG);
+        Assert.Null(result.Session.CurrentExitMovementId);
+    }
+
+    [Fact]
+    public async Task PartiallyRemovingUncertainPendingDoesNotHideUnknownMassStillOnTheScale()
+    {
+        await _factory.InDatabaseAsync(async db =>
+        {
+            (await db.Products.SingleAsync()).WeightTolerancePercent = 3m;
+            await db.SaveChangesAsync();
+        });
+        var entered = await ReportAsync([Enter("C"), Enter(null)], new(0, 301, true));
+        Assert.Equal(1, entered.Session.PendingWeightG);
+        Assert.Equal(9, entered.Session.PendingWeightUncertaintyG);
+        await ReportAsync([Exit("C")], new(301, 10, true));
+        var partial = await ReportAsync([Exit(null)], new(10, 5, true));
+        Assert.Equal(0, partial.Session.TotalMinor);
+        Assert.Empty(partial.Session.Items);
+        Assert.Equal(5, partial.Session.PendingWeightG);
+        Assert.Equal(BasketState.Pending, partial.Session.BasketState);
+        Assert.False(partial.Session.CanCheckout);
+        var empty = await ReportAsync([Exit(null)], new(5, 0, true));
+        Assert.Equal(0, empty.Session.PendingWeightG);
+        Assert.True(empty.Session.CanCheckout);
+    }
+
+    [Fact]
+    public async Task MultipleKnownExitsCanStillMixInvoiceAndPendingEvenWhenTheirTotalExceedsPending()
+    {
+        var original = await ReportAsync([Enter("A"), Enter("C")], new(0, 400, true));
+        await ReportAsync([Enter(null)], new(400, 550, true));
+        var result = await ReportAsync([Exit("A"), Exit("C")], new(550, 150, true));
+        Assert.Equal(4000, result.Session.TotalMinor);
+        Assert.Equal(2, result.Session.ExitChoices.Count);
+        var c = original.Session.Items.Single(item => item.Barcode == "C").Id;
+        Assert.Contains(result.Session.ExitChoices, choice => choice.SessionItemIds.SequenceEqual(new[] { c }) && choice.PendingWeightG == 100);
+        var confirmed = await _cart.InvokeAsync<CartMovementResult>("ConfirmExitChoice", _session,
+            await ChoiceAsync(result.Movement.MovementId, [c]));
+        Assert.Equal("A", Assert.Single(confirmed.Session.Items).Barcode);
+        Assert.Equal(1000, confirmed.Session.TotalMinor);
+        Assert.Equal(50, confirmed.Session.PendingWeightG);
+    }
+
+    [Fact]
+    public async Task KnownExitLargerThanPendingStillWaitsForTheOlderQuestionBeforeDeducting()
+    {
+        var original = await ReportAsync([Enter("A"), Enter("D"), Enter("C")], new(0, 500, true));
+        await ReportAsync([Enter(null)], new(500, 550, true));
+        var first = await ReportAsync([Exit(null)], new(550, 450, true));
+        var later = await ReportAsync([Exit("C")], new(450, 150, true));
+        Assert.Equal(first.Movement.MovementId, later.Session.CurrentExitMovementId);
+        Assert.Equal(5500, later.Session.TotalMinor);
+        var result = await _cart.InvokeAsync<CartMovementResult>("ConfirmExitChoice", _session,
+            await ChoiceAsync(first.Movement.MovementId, [original.Session.Items.Single(item => item.Barcode == "A").Id]));
+        Assert.Equal("D", Assert.Single(result.Session.Items).Barcode);
+        Assert.Equal(1500, result.Session.TotalMinor);
+        Assert.Equal(50, result.Session.PendingWeightG);
+        Assert.Null(result.Session.CurrentExitMovementId);
+    }
+
+    [Fact]
+    public async Task AnEarlierChoiceCannotConsumeAKnownLaterExitThatExceedsItsRemainingPending()
+    {
+        var original = await ReportAsync([Enter("A"), Enter("B"), Enter("C")], new(0, 600, true));
+        await ReportAsync([Enter(null)], new(600, 650, true));
+        var first = await ReportAsync([Exit(null)], new(650, 350, true));
+        var later = await ReportAsync([Exit("C")], new(350, 50, true));
+        Assert.Equal(first.Movement.MovementId, later.Session.CurrentExitMovementId);
+        var c = original.Session.Items.Single(item => item.Barcode == "C").Id;
+        Assert.DoesNotContain(later.Session.ExitChoices, choice => choice.SessionItemIds.Contains(c));
+        var result = await _cart.InvokeAsync<CartMovementResult>("ConfirmExitChoice", _session,
+            await ChoiceAsync(first.Movement.MovementId, original.Session.Items.Where(item => item.Barcode != "C").Select(item => item.Id).ToArray()));
+        Assert.Equal(0, result.Session.TotalMinor);
+        Assert.Equal(50, result.Session.PendingWeightG);
+        Assert.Empty(result.Session.Items);
+        Assert.Null(result.Session.CurrentExitMovementId);
     }
 
     [Fact]
@@ -391,9 +594,9 @@ public sealed class CartPendingFlowTests : IAsyncLifetime
     {
         await ReportAsync([Enter(null)], new(0, 5, true));
         await ReportAsync([Enter("A")], new(5, 105, true));
-        var question = await ReportAsync([Exit("A")], new(105, 5, true));
-        var knownRemoved = await _cart.InvokeAsync<CartMovementResult>("ConfirmExitChoice", _session,
-            await ChoiceAsync(question.Movement.MovementId, [question.Session.Items[0].Id]));
+        var knownRemoved = await ReportAsync([Exit("A")], new(105, 5, true));
+        Assert.Equal(0, knownRemoved.Session.TotalMinor);
+        Assert.Null(knownRemoved.Session.CurrentExitMovementId);
         Assert.Equal(5, knownRemoved.Session.PendingWeightG);
         Assert.False(knownRemoved.Session.CanCheckout);
         var returned = await ReportAsync([Exit(null)], new(5, 0, true));

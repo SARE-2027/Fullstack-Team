@@ -12,14 +12,18 @@ public sealed partial class CartMovementService
         while (session.BasketState != BasketState.NeedsStaff && CartExitQueue.First(reports) is { } head)
         {
             var matches = CartExitQueue.Find(invoice, head, reports);
+            var selected = matches.Choices.Count == 1
+                ? invoice.Where(item => matches.Choices[0].SessionItemIds.Contains(item.Id)).ToList() : [];
             if (matches.PendingOnly)
                 SettleExit(session, head, [], reports, decision, "PENDING_WEIGHT_REMOVED");
             else if (matches.Complete && matches.Choices.Count == 1
-                && (head.ExitPendingWeightG == 0 || allowUniqueWithPending))
+                && (head.ExitPendingWeightG == 0 || allowUniqueWithPending
+                    || head.UnconfirmedExitWeightG!.Value > (long)head.ExitPendingWeightG
+                        + head.ExitPendingUncertaintyG + head.ExitWeightUncertaintyG
+                        && CartExitQueue.IsKnownInvoiceExit(selected, head)))
             {
-                var ids = matches.Choices[0].SessionItemIds;
-                SettleExit(session, head, invoice.Where(item => ids.Contains(item.Id)).ToList(),
-                    reports, decision, "UNIQUE_WEIGHT_MATCH");
+                // نحسم التفسير الوحيد المسموح الآن، وبنفس ترتيب الطابور.
+                SettleExit(session, head, selected, reports, decision, "UNIQUE_WEIGHT_MATCH");
             }
             else
             {
@@ -31,14 +35,14 @@ public sealed partial class CartMovementService
                 break; // ننتظر إجابة أول سؤال فقط؛ لا نحسم سؤالًا متأخرًا قبله.
             }
         }
-        RefreshBasketState(session, reports, decision);
+        RefreshBasketState(session, reports, invoice, decision);
     }
 
     private static void SettleExit(Session session, CartMovement report, IReadOnlyList<SessionItem> selected,
         List<CartMovement> reports, CartMovement decision, string reason)
     {
         var invoiceWeight = selected.Sum(item => (long)item.ExpectedWeightG!.Value);
-        var pendingPart = (int)Math.Clamp(report.UnconfirmedExitWeightG!.Value - invoiceWeight, 0, report.ExitPendingWeightG);
+        var pendingPart = CartExitQueue.PendingPart(selected, report);
         var range = CartWeightPolicy.Sum(selected.Select(CartMovementProcessor.UnitRange));
         var uncertainty = report.ExitWeightUncertaintyG
             + (int)Math.Max(Math.Abs(range.Min - invoiceWeight), Math.Abs(range.Max - invoiceWeight));
@@ -78,12 +82,28 @@ public sealed partial class CartMovementService
         if (report.Id == decision.Id) report.UnconfirmedExitWeightG = null;
     }
 
-    private static void RefreshBasketState(Session session, List<CartMovement> reports, CartMovement decision)
+    private static void RefreshBasketState(Session session, List<CartMovement> reports,
+        IReadOnlyList<SessionItem> invoice, CartMovement decision)
     {
         if (session.BasketState == BasketState.NeedsStaff) return;
         session.BasketState = session.PendingWeightG > 0 || reports.Any(CartExitQueue.IsOpen)
             ? BasketState.Pending : BasketState.Verified;
         if (session.BasketState != BasketState.Verified) return;
+        var inside = invoice.Where(item => item.RemovedAt == null && item.BasketPresence == BasketPresence.Inside).ToList();
+        if (session.BasketWeightG is { } observed && inside.All(item => item.ExpectedWeightG.HasValue))
+        {
+            var range = CartWeightPolicy.Sum(inside.Select(CartMovementProcessor.UnitRange));
+            if (observed > range.Max)
+            {
+                // نفاد التقدير لا يمحو كتلة ما زالت على الميزان؛ نثبت المتبقي كمعلق دون عدد أو سعر.
+                var knownWeight = inside.Sum(item => (long)item.ExpectedWeightG!.Value);
+                session.PendingWeightG = (int)(observed - knownWeight);
+                session.PendingWeightUncertaintyG = (int)Math.Min(1_000_000, range.Max - knownWeight);
+                session.BasketState = BasketState.Pending;
+                decision.ReasonCode = "UNIDENTIFIED_WEIGHT";
+                return;
+            }
+        }
         foreach (var report in reports.Where(item => item.Status == CartMovementStatus.NeedsConfirmation))
         {
             CancelUnresolved(report, "RESOLVED_BY_EXIT");

@@ -84,6 +84,12 @@ The camera may miss pieces entirely; unexplained positive scale change is still
 recorded without inventing item counts. Later known entries and ordinary scans
 continue normally, and later unknown entries add to the same mass balance.
 
+Example: the basket gains 300g and the camera identifies one 100g piece. The other
+200g becomes Pending whether the camera reports two unknown observations, merges
+them into one, or misses them entirely. The known piece remains billed; later
+entries and placement of already-scanned pieces continue normally. `itemsCount`
+counts invoice units only, not the unknown physical pieces inside Pending.
+
 A negative residual after accounting for known crossings is a blind exit, even
 when the whole movement gained weight or stayed unchanged. For example, a known
 200g entry with a net gain of 100g leaves a 100g exit to resolve against the previous
@@ -110,12 +116,27 @@ Once NeedsStaff is saved, subsequent scans and camera reports cannot change bill
 | No Pending, identified exit | Remove a matching Inside invoice unit, using explicit ID/unique scoped track or the oldest matching purchase (removal intent first). |
 | No Pending, blind exit | Search invoice combinations. One financially distinct solution is automatic only after a complete search. Several solutions are shown to the shopper. |
 | Pending, recognized SKU absent from Inside invoice | Consume its observed exit mass from Pending if the balance covers it; no invoice deduction. |
-| Pending, recognized SKU present in invoice | Ask whether invoice units or unbilled contents left. Recognition of the SKU does not establish which identical physical unit left. |
-| Pending, blind exit | Search invoice-plus-Pending combinations. No possible invoice contribution after a complete search, with sufficient Pending, means Pending-only removal. Otherwise show choices. |
+| Pending, known exit matches an invoice unit and exceeds the available Pending including uncertainty | Remove the matching invoice unit automatically when it is the unique complete interpretation and reaches the queue head. The matching known exit does not consume Pending. |
+| Pending, recognized SKU present and Pending can explain its exit | Ask whether matching invoice units or unbilled contents left. Other SKUs are not alternatives merely because their weights agree. |
+| Pending, blind exit no greater than the available Pending including uncertainty | Search invoice-plus-Pending combinations. If a complete search finds no possible invoice contribution, consume Pending only; otherwise offer Pending-only and compatible invoice/mixed choices. |
+| Pending, blind exit greater than the available Pending including uncertainty | Offer compatible invoice-only or invoice-plus-partial-Pending choices. If none can explain the exit after a complete search, request staff; Pending alone cannot cover it. |
 
 The combination search includes partial unknown mass. For example, a 100g exit with
 Pending=200g and an invoice unit weighing 60g can mean that unit plus 40g of Pending.
 Absence of a full 100g invoice match does not justify automatically consuming Pending.
+
+Known-exit suggestions and submitted answers obey the same identity constraints.
+When the recognized observations explain the full exit weight, selections contain
+only those SKUs, up to their observed counts. A known observation assigned to Pending
+must fit the Pending portion of the measured exit. An actual blind remainder still
+uses invoice/Pending combinations. For several known pieces, the total exceeding
+Pending does not prove that every piece was billed: one smaller piece can still
+come from Pending while another comes from the invoice. Such alternatives remain a question.
+
+For a known invoice-only exit that matches its package-weight range, variation
+inside that range does not subtract nominal residual grams from Pending. Matching
+duplicate invoice SKUs use the original explicit ID/scoped track or saved purchase
+order, preserving stored prices. All automatic settlements still respect FIFO.
 
 For an exit larger than Pending, the shopper may select invoice units that explain
 some of the exit. Example: milk=1000g, Pending=200g, exit=1100g. Selecting milk removes
@@ -148,6 +169,8 @@ The result must lie in `0..Pending available at that exit ± effective tolerance
 are removed once, and pendingPart is deducted from Pending. This is a recorded human
 assertion, not independent physical proof. An inconsistent answer or needsStaff=true
 records NeedsStaff without changing the invoice. A stale Version is rejected.
+For a fully identified, matching invoice-only exit, pendingPart is zero; its package
+variation within tolerance does not count as unknown contents removed.
 
 Report metadata IDs are reused unchanged on network retries. Confirmation is a new
 command with new event/movement IDs, tied to the saved exit report; it does not rerun
@@ -177,11 +200,11 @@ does not request staff or put the cart in recount mode.
 - After an answer, walk the queue in order. Apply unique complete interpretations
   automatically (including a now-unique invoice/Pending combination); stop at the
   next ambiguity. An initial mixed-Pending question still requires customer input
-  unless the ordinary Pending-only rule already resolves it.
+  unless Pending-only removal or the uniquely identified invoice-only rule resolves it.
 - Recognized portions of a queued mixed exit remain constraints when Pending is
   zero. Matching total weight cannot replace a recognized SKU with an unrelated one.
 - Later identified exits also restrict earlier choices when their available Pending
-  is zero. For example, an earlier A-or-D blind exit followed by a recognized D exit
+  cannot explain them, including when it is zero. For example, an earlier A-or-D blind exit followed by a recognized D exit
   leaves A for the first exit and can resolve both automatically. Reserve enough
   earlier-placed units for the later recognized evidence, including explicit unit
   targets; uncertain observations alone do not establish those constraints.
@@ -274,7 +297,12 @@ ranges, including signed exits. The device sends the before/after readings and
 stability flag only; there is no client tolerance field or extra fixed gram allowance.
 Unknown grams retain pendingWeightUncertaintyG; see the
 [weight/recount contract](cart-staff-audit.md). A known movement does not silently
-clear an older small Pending balance. Real sensors and model confidence need calibration;
+clear an older small Pending balance. If an exit exhausts the estimated Pending
+and no exit question remains, the final measured weight must still fit the known
+Inside contents. Any positive excess beyond their weight range remains Pending:
+the server re-estimates its mass from the current reading instead of hiding it
+by marking the basket Verified. No item count or invoice charge is added.
+Real sensors and model confidence need calibration;
 matching weight is not proof of SKU identity, and model score is not a probability guarantee.
 
 Report, item changes, total and receipt save atomically. Session concurrency and unique
