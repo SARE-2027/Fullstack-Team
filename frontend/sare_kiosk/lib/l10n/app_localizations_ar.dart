@@ -57,6 +57,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get itemRemoved => 'تم حذف المنتج وتحديث وزن السلة';
 
   @override
+  String get itemRestored => 'تمت إعادة المنتج إلى سلتك';
+
+  @override
+  String get undo => 'تراجع';
+
+  @override
+  String get hide => 'إخفاء';
+
+  @override
+  String get show => 'عرض';
+
+  @override
   String get weightVerifying => 'جارٍ التحقق من وزن السلعة...';
 
   @override

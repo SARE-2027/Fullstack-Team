@@ -385,6 +385,14 @@ class _CartScreenState extends State<CartScreen> {
           message: l10n.itemRemoved,
           status: KioskBannerStatus.info,
           icon: Icons.remove_shopping_cart_rounded,
+          actionLabel: l10n.undo,
+          onAction: () => context.read<CartCubit>().undoRemove(),
+        );
+      case WeightBannerKind.restored:
+        return KioskStatusBanner(
+          message: l10n.itemRestored,
+          status: KioskBannerStatus.verified,
+          icon: Icons.settings_backup_restore_rounded,
           actionLabel: l10n.dismiss,
           onAction: () => context.read<CartCubit>().dismissBanner(),
         );

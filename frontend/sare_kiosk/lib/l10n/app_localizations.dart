@@ -182,6 +182,30 @@ abstract class AppLocalizations {
   /// **'Item removed from cart and basket weight updated'**
   String get itemRemoved;
 
+  /// No description provided for @itemRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Item restored to your cart'**
+  String get itemRestored;
+
+  /// No description provided for @undo.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undo;
+
+  /// No description provided for @hide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get hide;
+
+  /// No description provided for @show.
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get show;
+
   /// No description provided for @weightVerifying.
   ///
   /// In en, this message translates to:

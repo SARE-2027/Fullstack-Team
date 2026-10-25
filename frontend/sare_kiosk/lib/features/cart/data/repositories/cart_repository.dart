@@ -122,6 +122,29 @@ class CartRepository {
     return const Left(ServerFailure('Could not remove item from session.'));
   }
 
+  /// Re-appends a previously removed item to the current session (Undo).
+  /// Operates on the live session so items scanned after the removal are kept.
+  Future<Result<SessionSummary>> restoreItem({
+    required String sessionId,
+    required SessionItem item,
+  }) async {
+    final current = _localEngine.getSession(sessionId);
+    if (current == null || !current.isOpen) {
+      return const Left(ServerFailure('Active session not found.'));
+    }
+    final updatedItems = [...current.items, item];
+    final updatedTotal =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.unitPriceMinor);
+    final updated = current.copyWith(
+      items: updatedItems,
+      itemsCount: updatedItems.length,
+      totalMinor: updatedTotal,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _localEngine.cacheSession(updated);
+    return Right(updated);
+  }
+
   Future<Result<CheckoutResult>> checkout(
     String sessionId, {
     String paymentMethod = 'card',

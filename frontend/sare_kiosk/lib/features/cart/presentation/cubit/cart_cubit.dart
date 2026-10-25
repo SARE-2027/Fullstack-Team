@@ -28,7 +28,11 @@ class CartCubit extends Cubit<CartState> {
 
     _busy = true;
     _bannerHideTimer?.cancel();
-    emit(state.copyWith(isAdding: true, bannerKind: WeightBannerKind.verifying));
+    emit(state.copyWith(
+      isAdding: true,
+      bannerKind: WeightBannerKind.verifying,
+      clearRemovedItem: true,
+    ));
 
     final result = await _cartRepo.addItem(
       sessionId: _sessionId,
@@ -96,11 +100,59 @@ class CartCubit extends Cubit<CartState> {
 
   Future<bool> removeItem(String itemId) async {
     if (_busy) return false;
-    if (_sessionId.isEmpty || itemId.isEmpty) return false;
+    final sid = _sessionId;
+    if (sid.isEmpty || itemId.isEmpty) return false;
+
+    // Capture the item before removal so the banner can offer Undo.
+    final removedItem =
+        _sessionCubit.state.session?.items.where((i) => i.id == itemId).firstOrNull;
+
     _busy = true;
     _bannerHideTimer?.cancel();
 
-    final result = await _cartRepo.removeItem(sessionId: _sessionId, itemId: itemId);
+    final result =
+        await _cartRepo.removeItem(sessionId: sid, itemId: itemId);
+    if (isClosed) {
+      _busy = false;
+      return false;
+    }
+
+    final ok = result.fold(
+      (f) {
+        emit(CartState(
+          isAdding: false,
+          bannerKind: WeightBannerKind.mismatch,
+          bannerMessage: f.message,
+        ));
+        return false;
+      },
+      (updatedSession) {
+        _sessionCubit.setSession(updatedSession);
+        emit(CartState(
+          isAdding: false,
+          bannerKind: WeightBannerKind.removed,
+          lastRemovedItem: removedItem,
+        ));
+        _scheduleAutoDismiss(WeightBannerKind.removed);
+        return true;
+      },
+    );
+    _busy = false;
+    return ok;
+  }
+
+  /// Re-appends the most recently removed item while the removal banner is
+  /// still showing. Items scanned after the removal are preserved.
+  Future<bool> undoRemove() async {
+    if (_busy) return false;
+    final sid = _sessionId;
+    final item = state.lastRemovedItem;
+    if (sid.isEmpty || item == null) return false;
+
+    _busy = true;
+    _bannerHideTimer?.cancel();
+
+    final result = await _cartRepo.restoreItem(sessionId: sid, item: item);
     if (isClosed) {
       _busy = false;
       return false;
@@ -119,9 +171,9 @@ class CartCubit extends Cubit<CartState> {
         _sessionCubit.setSession(updatedSession);
         emit(const CartState(
           isAdding: false,
-          bannerKind: WeightBannerKind.removed,
+          bannerKind: WeightBannerKind.restored,
         ));
-        _scheduleAutoDismiss(WeightBannerKind.removed);
+        _scheduleAutoDismiss(WeightBannerKind.restored);
         return true;
       },
     );

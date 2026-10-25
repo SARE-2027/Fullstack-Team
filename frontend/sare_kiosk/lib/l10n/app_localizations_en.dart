@@ -57,6 +57,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get itemRemoved => 'Item removed from cart and basket weight updated';
 
   @override
+  String get itemRestored => 'Item restored to your cart';
+
+  @override
+  String get undo => 'Undo';
+
+  @override
+  String get hide => 'Hide';
+
+  @override
+  String get show => 'Show';
+
+  @override
   String get weightVerifying => 'Verifying item weight on load cells...';
 
   @override
