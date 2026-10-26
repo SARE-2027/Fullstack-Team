@@ -53,7 +53,15 @@ class _SareKioskAppState extends State<SareKioskApp> {
     _localeCubit = LocaleCubit();
     _sessionCubit = SessionCubit(_locator.sessionRepository, _locator.sessionStore);
     _cartCubit = CartCubit(_locator.cartRepository, _sessionCubit);
-    _router = buildAppRouter(initialLocation: widget.initialLocation);
+    _router = buildAppRouter(
+      initialLocation: widget.initialLocation,
+      sessionCubit: _sessionCubit,
+    );
+
+    // Boot-time session restore: after a power flicker on the Raspberry Pi,
+    // rehydrate the persisted session so the router redirect can carry the
+    // shopper straight back into their open cart.
+    _sessionCubit.loadPersisted();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WindowThemeHelper.updateTitleBarTheme(isDark: _themeCubit.state.isDark);
