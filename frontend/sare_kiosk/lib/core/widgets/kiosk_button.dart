@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import 'custom_text.dart';
 
-enum KioskButtonVariant {
-  primary,
-  secondary,
-  outlined,
-  danger,
-}
+enum KioskButtonVariant { primary, secondary, outlined, danger }
 
-/// Large, tactile button optimized for 10.1" supermarket touchscreen kiosks
-class KioskButton extends StatelessWidget {
+/// Large, tactile button optimized for 10.1" supermarket touchscreen kiosks.
+///
+/// The primary variant carries the brand emerald gradient with a soft glow —
+/// it is the single element on any screen allowed to shout. Press feedback is
+/// a quick sponge scale; loading swaps the icon slot for a spinner without
+/// shifting the layout.
+class KioskButton extends StatefulWidget {
   const KioskButton({
     super.key,
     required this.text,
@@ -34,66 +35,87 @@ class KioskButton extends StatelessWidget {
   final double borderRadius;
 
   @override
+  State<KioskButton> createState() => _KioskButtonState();
+}
+
+class _KioskButtonState extends State<KioskButton> {
+  bool _pressed = false;
+
+  bool get _enabled => widget.onPressed != null && !widget.isLoading;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = context.colors;
 
-    Color backgroundColor;
-    Color foregroundColor;
-    BorderSide? borderSide;
+    final Color background;
+    final Color foreground;
+    final BorderSide? borderSide;
+    final LinearGradient? gradient;
 
-    switch (variant) {
+    switch (widget.variant) {
       case KioskButtonVariant.primary:
-        backgroundColor = theme.colorScheme.primary;
-        foregroundColor = theme.colorScheme.onPrimary;
-        break;
+        background = colors.brand;
+        foreground = colors.onBrand;
+        borderSide = null;
+        gradient = colors.brandGradient;
       case KioskButtonVariant.secondary:
-        backgroundColor = colors.textFieldFill;
-        foregroundColor = colors.secondaryText;
-        borderSide = BorderSide(color: colors.containerBorder);
-        break;
+        background = colors.surfaceAlt;
+        foreground = theme.colorScheme.onSurface;
+        borderSide = BorderSide(color: colors.borderStrong);
+        gradient = null;
       case KioskButtonVariant.outlined:
-        backgroundColor = Colors.transparent;
-        foregroundColor = theme.colorScheme.primary;
-        borderSide = BorderSide(color: colors.containerBorder, width: 1.5);
-        break;
+        background = Colors.transparent;
+        foreground = theme.colorScheme.onSurface;
+        borderSide = BorderSide(color: colors.borderStrong, width: 1.4);
+        gradient = null;
       case KioskButtonVariant.danger:
-        backgroundColor = colors.weightDiscrepancy;
-        foregroundColor = Colors.white;
-        break;
+        background = colors.danger;
+        foreground = colors.onDanger;
+        borderSide = null;
+        gradient = null;
     }
 
-    Widget content = Row(
+    final glow = widget.variant == KioskButtonVariant.primary && _enabled
+        ? [
+            BoxShadow(
+              color: colors.brandGlow,
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+              spreadRadius: -4,
+            ),
+          ]
+        : <BoxShadow>[];
+
+    final content = Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (isLoading) ...[
+        if (widget.isLoading) ...[
           SizedBox(
             width: 22,
             height: 22,
             child: CircularProgressIndicator(
               strokeWidth: 2.5,
-              valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
+              strokeCap: StrokeCap.round,
+              valueColor: AlwaysStoppedAnimation<Color>(foreground),
             ),
           ),
           const SizedBox(width: 12),
-        ] else if (icon != null) ...[
+        ] else if (widget.icon != null) ...[
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
+            duration: AppTypography.base,
+            switchInCurve: AppTypography.enterCurve,
+            switchOutCurve: AppTypography.exitCurve,
             transitionBuilder: (child, animation) => ScaleTransition(
               scale: animation,
-              child: FadeTransition(
-                opacity: animation,
-                child: child,
-              ),
+              child: FadeTransition(opacity: animation, child: child),
             ),
             child: Icon(
-              icon,
-              key: ValueKey(icon),
+              widget.icon,
+              key: ValueKey(widget.icon),
               size: 22,
-              color: foregroundColor,
+              color: foreground,
             ),
           ),
           const SizedBox(width: 10),
@@ -102,19 +124,17 @@ class KioskButton extends StatelessWidget {
           child: FittedBox(
             fit: BoxFit.scaleDown,
             child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: child,
-              ),
+              duration: AppTypography.base,
+              switchInCurve: AppTypography.enterCurve,
+              switchOutCurve: AppTypography.exitCurve,
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
               child: CustomText(
-                text,
-                key: ValueKey(text),
+                widget.text,
+                key: ValueKey(widget.text),
                 fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: foregroundColor,
+                fontWeight: FontWeight.w700,
+                color: foreground,
                 maxLines: 1,
               ),
             ),
@@ -123,29 +143,62 @@ class KioskButton extends StatelessWidget {
       ],
     );
 
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.center,
-      child: SizedBox(
-        height: height,
-        width: width,
-        child: ElevatedButton(
-          onPressed: isLoading ? null : onPressed,
-          style: ElevatedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: backgroundColor,
-          foregroundColor: foregroundColor,
-          disabledBackgroundColor: backgroundColor.withValues(alpha: 0.5),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            side: borderSide ?? BorderSide.none,
+    return IgnorePointer(
+      ignoring: !_enabled,
+      child: MouseRegion(
+        cursor: _enabled ? SystemMouseCursors.click : MouseCursor.defer,
+        child: Listener(
+          onPointerDown: (_) => setState(() => _pressed = true),
+          onPointerUp: (_) => setState(() => _pressed = false),
+          onPointerCancel: (_) => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.97 : 1.0,
+            duration: AppTypography.fast,
+            curve: AppTypography.enterCurve,
+            child: AnimatedContainer(
+              duration: AppTypography.base,
+              curve: AppTypography.enterCurve,
+              decoration: BoxDecoration(
+                color: gradient == null ? background : null,
+                gradient: gradient,
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+                border: Border.fromBorderSide(
+                  borderSide ?? BorderSide.none,
+                ),
+                boxShadow: _pressed ? [] : glow,
+              ),
+              child: AnimatedOpacity(
+                duration: AppTypography.base,
+                opacity: _enabled ? 1 : 0.55,
+                child: SizedBox(
+                  height: widget.height,
+                  width: widget.width,
+                  child: ElevatedButton(
+                    onPressed: widget.isLoading ? null : widget.onPressed,
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      foregroundColor: foreground,
+                      disabledBackgroundColor: Colors.transparent,
+                      disabledForegroundColor: foreground,
+                      overlayColor: Colors.white.withValues(alpha: 0.10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(widget.borderRadius),
+                      ),
+                    ),
+                    child: content,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
-        child: content,
       ),
-    ),
-  );
+    );
   }
 }

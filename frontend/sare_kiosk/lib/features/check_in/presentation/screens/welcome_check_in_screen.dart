@@ -27,9 +27,40 @@ class WelcomeCheckInScreen extends StatefulWidget {
   State<WelcomeCheckInScreen> createState() => _WelcomeCheckInScreenState();
 }
 
-class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
+class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
+    with SingleTickerProviderStateMixin {
+  static const Duration _entrance = Duration(milliseconds: 1100);
+
   bool _starting = false;
   String? _localError;
+  late final AnimationController _intro;
+
+  @override
+  void initState() {
+    super.initState();
+    _intro = AnimationController(vsync: this, duration: _entrance)..forward();
+  }
+
+  @override
+  void dispose() {
+    _intro.dispose();
+    super.dispose();
+  }
+
+  /// One-shot staggered entrance: fade + rise, each element entering on its
+  /// own interval of the shared controller.
+  Widget _entranceSlot(Interval interval, {required Widget child}) {
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: _intro, curve: interval),
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.35),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: _intro, curve: interval)),
+        child: child,
+      ),
+    );
+  }
 
   Future<void> _startGuest() async {
     if (_starting) return;
@@ -76,6 +107,7 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
   Future<void> _showNfcSignInModal() async {
     final selectedNfcUid = await showDialog<String>(
       context: context,
+      barrierColor: context.colors.scrim,
       builder: (dialogContext) => const _NfcMemberSignInDialog(),
     );
     if (!mounted || selectedNfcUid == null || selectedNfcUid.trim().isEmpty) {
@@ -90,174 +122,75 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
     final colors = context.colors;
     final config = context.kioskConfig;
 
-    return BlocConsumer<SessionCubit, SessionState>(
-      listenWhen: (prev, next) => prev.error != next.error && next.error != null,
-      listener: (context, state) {
-        if (state.error != null && !_starting) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.error!), duration: const Duration(seconds: 3)),
-          );
-        }
-      },
+    return BlocBuilder<SessionCubit, SessionState>(
       builder: (context, sessionState) {
         final sessionError = sessionState.error;
 
-        return Scaffold(
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: IntrinsicHeight(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                        child: Column(
-                          children: [
-                            Directionality(
-                              textDirection: TextDirection.ltr,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Flexible(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          KioskStatusBadge(
-                                            leading: Icon(
-                                              Icons.shopping_cart_outlined,
-                                              size: 18,
-                                              color: colors.secondaryText,
-                                            ),
-                                            label: l10n.cartNumberLabel(config.cartNumber),
-                                            borderColor: colors.containerBorder,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          KioskStatusBadge(
-                                            leading: Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: config.isScaleReady
-                                                    ? colors.weightVerified
-                                                    : colors.weightDiscrepancy,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            label: config.isScaleReady
-                                                ? l10n.scaleReadyLabel
-                                                : l10n.scaleOfflineLabel,
-                                            backgroundColor: (config.isScaleReady
-                                                    ? colors.weightVerified
-                                                    : colors.weightDiscrepancy)
-                                                .withValues(alpha: 0.12),
-                                            textColor: config.isScaleReady
-                                                ? colors.weightVerified
-                                                : colors.weightDiscrepancy,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Flexible(
-                                    child: FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerRight,
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          KioskHeaderButton(
-                                            onPressed: () => showKioskStaffHelpDialog(context),
-                                            icon: Icons.support_agent_rounded,
-                                            label: l10n.callStaff,
-                                            borderColor: colors.containerBorder,
-                                            backgroundColor: colors.textFieldFill,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          KioskHeaderButton(
-                                            onPressed: widget.onToggleTheme,
-                                            icon: widget.isDarkMode
-                                                ? Icons.light_mode_outlined
-                                                : Icons.dark_mode_outlined,
-                                            label: widget.isDarkMode
-                                                ? l10n.themeLight
-                                                : l10n.themeDark,
-                                            borderColor: colors.containerBorder,
-                                            backgroundColor: colors.textFieldFill,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          KioskHeaderButton(
-                                            onPressed: widget.onToggleLocale,
-                                            icon: Icons.language,
-                                            label: l10n.switchLanguage,
-                                            borderColor: colors.containerBorder,
-                                            backgroundColor: colors.textFieldFill,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+        return KioskScaffold(
+          onToggleLocale: widget.onToggleLocale,
+          onToggleTheme: widget.onToggleTheme,
+          isDarkMode: widget.isDarkMode,
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                      child: Column(
+                        children: [
+                          const Spacer(flex: 2),
+                          _entranceSlot(
+                            const Interval(0.0, 0.45, curve: Curves.easeOutCubic),
+                            child: RepaintBoundary(
+                              child: _BrandMark(colors: colors),
                             ),
-                            const Spacer(),
-                            RepaintBoundary(
-                              child: Container(
-                                width: 76,
-                                height: 76,
-                                decoration: BoxDecoration(
-                                  color: colors.textFieldFill,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: colors.containerBorder, width: 1.5),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    Icons.shopping_cart_checkout_rounded,
-                                    size: 38,
-                                    color: Theme.of(context).colorScheme.primary,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            AnimatedSwitcher(
+                          ),
+                          const SizedBox(height: 24),
+                          _entranceSlot(
+                            const Interval(0.12, 0.55, curve: Curves.easeOutCubic),
+                            child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
                               transitionBuilder: (child, animation) =>
                                   FadeTransition(opacity: animation, child: child),
                               child: CustomText(
                                 l10n.appName,
                                 key: ValueKey(l10n.appName),
-                                fontSize: 32,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 34,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            AnimatedSwitcher(
+                          ),
+                          const SizedBox(height: 8),
+                          _entranceSlot(
+                            const Interval(0.2, 0.62, curve: Curves.easeOutCubic),
+                            child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
                               transitionBuilder: (child, animation) =>
                                   FadeTransition(opacity: animation, child: child),
                               child: CustomText(
                                 l10n.welcomeSubtitle,
                                 key: ValueKey(l10n.welcomeSubtitle),
                                 fontSize: 16,
-                                color: colors.secondaryText,
+                                color: colors.textSecondary,
                                 textAlign: TextAlign.center,
                               ),
                             ),
-                            const SizedBox(height: 36),
-                            ConstrainedBox(
+                          ),
+                          const SizedBox(height: 36),
+                          _entranceSlot(
+                            const Interval(0.3, 0.75, curve: Curves.easeOutCubic),
+                            child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                maxWidth: (constraints.maxWidth * 0.74).clamp(720.0, 860.0),
+                                maxWidth:
+                                    (constraints.maxWidth * 0.74).clamp(720.0, 880.0),
                               ),
                               child: IntrinsicHeight(
                                 child: Row(
@@ -276,7 +209,8 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
                                           height: 52,
                                           icon: Icons.arrow_forward_rounded,
                                           isLoading: _starting,
-                                          onPressed: _starting ? null : _startGuest,
+                                          onPressed:
+                                              _starting ? null : _startGuest,
                                         ),
                                       ),
                                     ),
@@ -290,9 +224,10 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
                                         actionButton: KioskButton(
                                           text: l10n.loyaltySignIn,
                                           height: 52,
-                                          variant: KioskButtonVariant.outlined,
+                                          variant: KioskButtonVariant.secondary,
                                           icon: Icons.contactless_rounded,
-                                          onPressed: _starting ? null : _showNfcSignInModal,
+                                          onPressed:
+                                              _starting ? null : _showNfcSignInModal,
                                         ),
                                       ),
                                     ),
@@ -300,15 +235,21 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
                                 ),
                               ),
                             ),
-                            if (_localError != null || sessionError != null) ...[
-                              const SizedBox(height: 16),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                          if (_localError != null || sessionError != null) ...[
+                            const SizedBox(height: 16),
+                            _entranceSlot(
+                              const Interval(0.0, 1.0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: colors.weightDiscrepancy.withValues(alpha: 0.10),
+                                  color: colors.danger.withValues(alpha: 0.10),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: colors.weightDiscrepancy.withValues(alpha: 0.35),
+                                    color: colors.danger.withValues(alpha: 0.35),
                                   ),
                                 ),
                                 child: Row(
@@ -317,42 +258,86 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen> {
                                     Icon(
                                       Icons.error_outline_rounded,
                                       size: 18,
-                                      color: colors.weightDiscrepancy,
+                                      color: colors.danger,
                                     ),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: CustomText(
-                                        _localError ?? sessionError ?? l10n.sessionFailed,
+                                        _localError ??
+                                            sessionError ??
+                                            l10n.sessionFailed,
                                         fontSize: 13,
-                                        color: colors.weightDiscrepancy,
+                                        color: colors.danger,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ],
-                            if (!config.isScaleReady) ...[
-                              const SizedBox(height: 10),
-                              CustomText(
-                                l10n.scaleOfflineHelp,
-                                fontSize: 12,
-                                color: colors.secondaryText,
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                            const Spacer(),
+                            ),
                           ],
-                        ),
+                          if (!config.isScaleReady) ...[
+                            const SizedBox(height: 10),
+                            CustomText(
+                              l10n.scaleOfflineHelp,
+                              fontSize: 12,
+                              color: colors.textSecondary,
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                          const Spacer(flex: 3),
+                        ],
                       ),
                     ),
                   ),
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
         );
       },
+    );
+  }
+}
+
+/// SARE brand mark: emerald gradient squircle inside a quiet ring —
+/// the single ornamental element on the welcome screen.
+class _BrandMark extends StatelessWidget {
+  const _BrandMark({required this.colors});
+
+  final AppColorTheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: colors.brand.withValues(alpha: 0.28)),
+      ),
+      child: Container(
+        width: 78,
+        height: 78,
+        decoration: BoxDecoration(
+          gradient: colors.brandGradient,
+          borderRadius: BorderRadius.circular(26),
+          boxShadow: [
+            BoxShadow(
+              color: colors.brandGlow,
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+              spreadRadius: -4,
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.shopping_cart_checkout_rounded,
+            size: 40,
+            color: Colors.white,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -386,15 +371,15 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
     final locale = Localizations.localeOf(context).languageCode;
 
     return Dialog(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: colors.containerBorder, width: 1.5),
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: colors.borderStrong, width: 1.4),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 540),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(26),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -403,15 +388,18 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
-                        color: colors.weightVerified.withValues(alpha: 0.14),
-                        shape: BoxShape.circle,
+                        color: colors.brand.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: colors.brand.withValues(alpha: 0.35),
+                        ),
                       ),
                       child: Icon(
                         Icons.contactless_rounded,
                         size: 26,
-                        color: colors.weightVerified,
+                        color: colors.brand,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -422,20 +410,20 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                           CustomText(
                             l10n.nfcModalTitle,
                             fontSize: 19,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                           ),
                           const SizedBox(height: 2),
                           CustomText(
                             l10n.nfcModalSubtitle,
                             fontSize: 12,
-                            color: colors.secondaryText,
+                            color: colors.textSecondary,
                           ),
                         ],
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close_rounded, color: colors.secondaryText),
+                      icon: Icon(Icons.close_rounded, color: colors.textSecondary),
                     ),
                   ],
                 ),
@@ -449,27 +437,27 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                         onTap: () => Navigator.of(context).pop(member.nfcUid),
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           decoration: BoxDecoration(
-                            color: colors.textFieldFill,
+                            color: colors.surfaceAlt,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: colors.containerBorder),
+                            border: Border.all(color: colors.border),
                           ),
                           child: Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(9),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withValues(alpha: 0.10),
-                                  shape: BoxShape.circle,
+                                  color: colors.brand.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(11),
                                 ),
                                 child: Icon(
                                   Icons.credit_card_rounded,
-                                  size: 18,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  size: 19,
+                                  color: colors.brand,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -486,7 +474,7 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                                     CustomText(
                                       '${member.displayTier(locale)} • UID: ${member.nfcUid}',
                                       fontSize: 12,
-                                      color: colors.secondaryText,
+                                      color: colors.textSecondary,
                                     ),
                                   ],
                                 ),
@@ -494,7 +482,7 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                               Icon(
                                 Icons.arrow_forward_ios_rounded,
                                 size: 15,
-                                color: colors.secondaryText,
+                                color: colors.textFaint,
                               ),
                             ],
                           ),
@@ -513,7 +501,7 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                         prefixIcon: Icon(
                           Icons.nfc_rounded,
                           size: 20,
-                          color: colors.secondaryText,
+                          color: colors.textSecondary,
                         ),
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => _submitManual(),

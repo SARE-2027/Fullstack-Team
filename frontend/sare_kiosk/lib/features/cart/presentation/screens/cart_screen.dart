@@ -91,7 +91,9 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     final char = event.character;
-    if (char != null && char.isNotEmpty && RegExp(r'[0-9A-Za-z\-_]').hasMatch(char)) {
+    if (char != null &&
+        char.isNotEmpty &&
+        RegExp(r'[0-9A-Za-z\-_]').hasMatch(char)) {
       _hidBuffer.write(char);
     }
     return false;
@@ -128,36 +130,48 @@ class _CartScreenState extends State<CartScreen> {
     if (session.items.isNotEmpty) {
       final confirmed = await showDialog<bool>(
         context: context,
+        barrierColor: colors.scrim,
         builder: (dialogContext) => Dialog(
-          backgroundColor: Theme.of(dialogContext).scaffoldBackgroundColor,
+          backgroundColor: Theme.of(dialogContext).colorScheme.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: colors.containerBorder, width: 1.5),
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: colors.borderStrong, width: 1.4),
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
             child: Padding(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(26),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.exit_to_app_rounded,
-                    size: 40,
-                    color: colors.weightDiscrepancy,
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: colors.danger.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: colors.danger.withValues(alpha: 0.30),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.exit_to_app_rounded,
+                      size: 30,
+                      color: colors.danger,
+                    ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   CustomText(
                     l10n.endSessionConfirmTitle,
                     fontSize: 19,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   CustomText(
                     l10n.endSessionConfirmMessage,
                     fontSize: 14,
-                    color: colors.secondaryText,
+                    color: colors.textSecondary,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 22),
@@ -166,8 +180,9 @@ class _CartScreenState extends State<CartScreen> {
                       Expanded(
                         child: KioskButton(
                           text: l10n.cancel,
-                          variant: KioskButtonVariant.outlined,
-                          onPressed: () => Navigator.of(dialogContext).pop(false),
+                          variant: KioskButtonVariant.secondary,
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -175,7 +190,8 @@ class _CartScreenState extends State<CartScreen> {
                         child: KioskButton(
                           text: l10n.confirm,
                           variant: KioskButtonVariant.danger,
-                          onPressed: () => Navigator.of(dialogContext).pop(true),
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
                         ),
                       ),
                     ],
@@ -206,7 +222,13 @@ class _CartScreenState extends State<CartScreen> {
             final session = sessionState.session;
             final colors = context.colors;
 
-            final banner = _buildBanner(context, l10n, locale, sessionState, cartState);
+            final banner = _buildBanner(
+              context,
+              l10n,
+              locale,
+              sessionState,
+              cartState,
+            );
 
             if (sessionState.isLoading && session == null) {
               return KioskScaffold(
@@ -233,7 +255,7 @@ class _CartScreenState extends State<CartScreen> {
                         Icon(
                           Icons.receipt_long_rounded,
                           size: 48,
-                          color: colors.secondaryText,
+                          color: colors.textFaint,
                         ),
                         const SizedBox(height: 12),
                         CustomText(
@@ -246,7 +268,7 @@ class _CartScreenState extends State<CartScreen> {
                         CustomText(
                           sessionState.error ?? l10n.networkError,
                           fontSize: 13,
-                          color: colors.secondaryText,
+                          color: colors.textSecondary,
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 18),
@@ -269,7 +291,8 @@ class _CartScreenState extends State<CartScreen> {
             }
 
             final shopperLabel = session.isMember
-                ? l10n.memberShopperBadge(session.userName ?? session.nfcUid ?? '')
+                ? l10n.memberShopperBadge(
+                    session.userName ?? session.nfcUid ?? '')
                 : l10n.guestShopperBadge;
 
             return KioskScaffold(
@@ -279,19 +302,18 @@ class _CartScreenState extends State<CartScreen> {
               floatingBanner: banner,
               extraStatusBadge: KioskStatusBadge(
                 leading: Icon(
-                  session.isMember ? Icons.verified_user_rounded : Icons.person_outline_rounded,
+                  session.isMember
+                      ? Icons.verified_user_rounded
+                      : Icons.person_outline_rounded,
                   size: 16,
-                  color: session.isMember ? colors.weightVerified : colors.secondaryText,
+                  color: session.isMember ? colors.verified : colors.textSecondary,
                 ),
                 label: shopperLabel,
-                borderColor: colors.containerBorder,
               ),
               extraActionButton: KioskHeaderButton(
                 onPressed: () => _handleEndSession(session),
                 icon: Icons.logout_rounded,
                 label: l10n.endSessionButton,
-                borderColor: colors.containerBorder,
-                backgroundColor: colors.textFieldFill,
               ),
               body: LayoutBuilder(
                 builder: (context, constraints) {
@@ -316,20 +338,25 @@ class _CartScreenState extends State<CartScreen> {
                                   children: [
                                     Expanded(
                                       flex: 3,
-                                      child: _buildItemsList(session, l10n, colors),
+                                      child: _buildItemsList(
+                                          session, l10n, colors),
                                     ),
                                     const SizedBox(width: 18),
                                     SizedBox(
                                       width: 350,
                                       child: SingleChildScrollView(
-                                        child: _buildSidePanel(session, cartState),
+                                        child: _buildSidePanel(
+                                            session, cartState),
                                       ),
                                     ),
                                   ],
                                 )
                               : Column(
                                   children: [
-                                    Expanded(child: _buildItemsList(session, l10n, colors)),
+                                    Expanded(
+                                      child: _buildItemsList(
+                                          session, l10n, colors),
+                                    ),
                                     const SizedBox(height: 12),
                                     _buildSidePanel(session, cartState),
                                   ],
@@ -364,17 +391,20 @@ class _CartScreenState extends State<CartScreen> {
     switch (cartState.bannerKind) {
       case WeightBannerKind.verifying:
         return KioskStatusBanner(
+          key: const ValueKey('banner-verifying'),
           message: l10n.weightVerifying,
           status: KioskBannerStatus.info,
           icon: Icons.scale_rounded,
         );
       case WeightBannerKind.success:
-        final itemName =
-            locale == 'ar' ? cartState.lastItemNameAr : cartState.lastItemNameEn;
+        final itemName = locale == 'ar'
+            ? cartState.lastItemNameAr
+            : cartState.lastItemNameEn;
         final msg = itemName != null && itemName.isNotEmpty
             ? '${l10n.itemAddedSuccess} — $itemName'
             : l10n.itemAddedSuccess;
         return KioskStatusBanner(
+          key: ValueKey('banner-success-$msg'),
           message: msg,
           status: KioskBannerStatus.verified,
           actionLabel: l10n.dismiss,
@@ -382,6 +412,7 @@ class _CartScreenState extends State<CartScreen> {
         );
       case WeightBannerKind.removed:
         return KioskStatusBanner(
+          key: const ValueKey('banner-removed'),
           message: l10n.itemRemoved,
           status: KioskBannerStatus.info,
           icon: Icons.remove_shopping_cart_rounded,
@@ -390,6 +421,7 @@ class _CartScreenState extends State<CartScreen> {
         );
       case WeightBannerKind.restored:
         return KioskStatusBanner(
+          key: const ValueKey('banner-restored'),
           message: l10n.itemRestored,
           status: KioskBannerStatus.verified,
           icon: Icons.settings_backup_restore_rounded,
@@ -398,7 +430,8 @@ class _CartScreenState extends State<CartScreen> {
         );
       case WeightBannerKind.mismatch:
         String msg = cartState.bannerMessage ?? l10n.weightMismatchWarning;
-        if (cartState.lastExpectedG != null && cartState.lastMeasuredG != null) {
+        if (cartState.lastExpectedG != null &&
+            cartState.lastMeasuredG != null) {
           final expStr = KioskFormatter.formatWeight(
             cartState.lastExpectedG!.toDouble(),
             locale,
@@ -407,9 +440,11 @@ class _CartScreenState extends State<CartScreen> {
             cartState.lastMeasuredG!.toDouble(),
             locale,
           );
-          msg = '${l10n.weightMismatchWarning} (${l10n.weightMismatchDetail(expStr, measStr)})';
+          msg =
+              '${l10n.weightMismatchWarning} (${l10n.weightMismatchDetail(expStr, measStr)})';
         }
         return KioskStatusBanner(
+          key: ValueKey('banner-mismatch-$msg'),
           message: msg,
           status: KioskBannerStatus.discrepancy,
           actionLabel: l10n.dismiss,
@@ -418,6 +453,7 @@ class _CartScreenState extends State<CartScreen> {
       case WeightBannerKind.none:
         if (sessionState.error != null) {
           return KioskStatusBanner(
+            key: ValueKey('banner-error-${sessionState.error}'),
             message: sessionState.error!,
             status: KioskBannerStatus.discrepancy,
             actionLabel: l10n.retry,
@@ -437,9 +473,9 @@ class _CartScreenState extends State<CartScreen> {
     if (items.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color: colors.textFieldFill,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.containerBorder),
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
         ),
         child: Center(
           child: Padding(
@@ -447,29 +483,39 @@ class _CartScreenState extends State<CartScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.shopping_bag_outlined,
-                  size: 42,
-                  color: colors.secondaryText,
+                CustomPaint(
+                  size: const Size(110, 110),
+                  painter: _DashedRingPainter(color: colors.borderStrong),
+                  child: SizedBox(
+                    width: 110,
+                    height: 110,
+                    child: Center(
+                      child: Icon(
+                        Icons.shopping_bag_outlined,
+                        size: 42,
+                        color: colors.textFaint,
+                      ),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 CustomText(
                   l10n.emptyCartTitle,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
                 ),
                 const SizedBox(height: 6),
                 CustomText(
                   l10n.emptyCartMessage,
                   fontSize: 13,
-                  color: colors.secondaryText,
+                  color: colors.textSecondary,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 CustomText(
                   l10n.emptyCartHint,
                   fontSize: 12,
-                  color: colors.secondaryText,
+                  color: colors.textFaint,
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -479,19 +525,22 @@ class _CartScreenState extends State<CartScreen> {
       );
     }
     return RepaintBoundary(
-      child: ListView.separated(
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return RepaintBoundary(
-            child: CartItemTile(
-              key: ValueKey(item.id),
-              item: item,
-              onRemove: () => context.read<CartCubit>().removeItem(item.id),
-            ),
-          );
-        },
+      child: Scrollbar(
+        thumbVisibility: false,
+        child: ListView.separated(
+          itemCount: items.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return RepaintBoundary(
+              child: CartItemTile(
+                key: ValueKey(item.id),
+                item: item,
+                onRemove: () => context.read<CartCubit>().removeItem(item.id),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -509,4 +558,39 @@ class _CartScreenState extends State<CartScreen> {
       ),
     );
   }
+}
+
+/// Quiet dashed ring framing the empty-basket state — echoes the basket
+/// without introducing a new illustration language.
+class _DashedRingPainter extends CustomPainter {
+  _DashedRingPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    final radius = size.width / 2 - 2;
+    const dashCount = 26;
+    const gap = 0.55;
+    const sweep = (2 * 3.141592653589793) / dashCount;
+    final center = Offset(size.width / 2, size.height / 2);
+    for (var i = 0; i < dashCount; i++) {
+      final start = i * sweep;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        start,
+        sweep * (1 - gap),
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRingPainter oldDelegate) =>
+      color != oldDelegate.color;
 }

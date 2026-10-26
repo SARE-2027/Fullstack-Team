@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/utils/kiosk_formatter.dart';
+import '../../../../core/utils/kiosk_motion.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/custom_text.dart';
 import '../../../../core/widgets/kiosk_button.dart';
+import '../../../../core/widgets/kiosk_pulse_dot.dart';
 import '../../../../l10n/app_localizations.dart';
 
+/// Side-panel summary: live load-cell telemetry, VAT breakdown, and the
+/// primary checkout CTA. The telemetry module is the kiosk's verification
+/// signature — pulsing dot, tolerance gate badge, verified weight.
 class CartSummaryBar extends StatelessWidget {
   const CartSummaryBar({
     super.key,
@@ -29,83 +34,103 @@ class CartSummaryBar extends StatelessWidget {
     final locale = Localizations.localeOf(context).languageCode;
     final colors = context.colors;
     final split = Money.splitVat(totalMinor);
-    final sub = Money.formatMinor(split.subtotalMinor, locale, symbol: ' ${l10n.currencySymbol}');
-    final vat = Money.formatMinor(split.vatMinor, locale, symbol: ' ${l10n.currencySymbol}');
-    final tot = Money.formatMinor(totalMinor, locale, symbol: ' ${l10n.currencySymbol}');
-    final weightFormatted = KioskFormatter.formatWeight(totalWeightG.toDouble(), locale);
+    final sub = Money.formatMinor(
+      split.subtotalMinor,
+      locale,
+      symbol: ' ${l10n.currencySymbol}',
+    );
+    final vat = Money.formatMinor(
+      split.vatMinor,
+      locale,
+      symbol: ' ${l10n.currencySymbol}',
+    );
+    final tot = Money.formatMinor(
+      totalMinor,
+      locale,
+      symbol: ' ${l10n.currencySymbol}',
+    );
+    final weightFormatted =
+        KioskFormatter.formatWeight(totalWeightG.toDouble(), locale);
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: colors.textFieldFill,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.containerBorder, width: 1.2),
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border, width: 1.2),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Live Load-Cell Scale Telemetry Box
+          // Live Load-Cell Scale Telemetry — the verification signature.
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colors.containerBorder.withValues(alpha: 0.6)),
+              color: colors.verified.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: colors.verified.withValues(alpha: 0.28),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(
-                      Icons.scale_rounded,
-                      size: 16,
-                      color: colors.weightVerified,
+                    KioskPulseDot(
+                      color: colors.verified,
+                      size: 8,
+                      animate: KioskMotion.ambientEnabled(context),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     Expanded(
                       child: CustomText(
                         l10n.liveScaleTitle,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
+                        color: colors.verified,
                         maxLines: 1,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: colors.weightVerified.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(6),
+                        color: colors.verified.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(7),
                       ),
                       child: CustomText(
                         l10n.toleranceBadge,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: colors.weightVerified,
+                        color: colors.verified,
                         maxLines: 1,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: CustomText(
                         l10n.totalBasketWeight,
                         fontSize: 12,
-                        color: colors.secondaryText,
+                        color: colors.textSecondary,
                         maxLines: 1,
                       ),
                     ),
                     const SizedBox(width: 8),
                     CustomText(
                       weightFormatted,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: colors.weightVerified,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: colors.verified,
                       maxLines: 1,
                     ),
                   ],
@@ -113,39 +138,51 @@ class CartSummaryBar extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
                 child: CustomText(
                   l10n.itemsCount(itemsCount),
                   fontSize: 13,
-                  color: colors.secondaryText,
+                  color: colors.textSecondary,
                   fontWeight: FontWeight.w600,
                   maxLines: 1,
                 ),
               ),
               const SizedBox(width: 8),
-              CustomText(tot, fontSize: 18, fontWeight: FontWeight.w900, maxLines: 1),
+              CustomText(
+                tot,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                maxLines: 1,
+              ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _row(l10n.subtotal, sub, colors),
           const SizedBox(height: 6),
           _row(l10n.tax, vat, colors),
-          const Divider(height: 18),
+          const Divider(height: 20),
           Row(
             children: [
               Expanded(
                 child: CustomText(
                   l10n.totalAmount,
                   fontSize: 15,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                   maxLines: 1,
                 ),
               ),
               const SizedBox(width: 8),
-              CustomText(tot, fontSize: 17, fontWeight: FontWeight.w900, maxLines: 1),
+              CustomText(
+                tot,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: colors.brand,
+                maxLines: 1,
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -167,7 +204,7 @@ class CartSummaryBar extends StatelessWidget {
           child: CustomText(
             label,
             fontSize: 13,
-            color: colors.secondaryText,
+            color: colors.textSecondary,
             maxLines: 1,
           ),
         ),
@@ -176,7 +213,7 @@ class CartSummaryBar extends StatelessWidget {
           value,
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: colors.secondaryText,
+          color: colors.textSecondary,
           maxLines: 1,
         ),
       ],

@@ -15,48 +15,52 @@ Future<void> showKioskStaffHelpDialog(BuildContext context) {
 
   return showDialog<void>(
     context: context,
+    barrierColor: colors.scrim,
     builder: (dialogContext) {
       return Dialog(
-        backgroundColor: Theme.of(dialogContext).scaffoldBackgroundColor,
+        backgroundColor: Theme.of(dialogContext).colorScheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: colors.containerBorder, width: 1.5),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: colors.borderStrong, width: 1.4),
         ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 440),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 60,
-                  height: 60,
+                  width: 64,
+                  height: 64,
                   decoration: BoxDecoration(
-                    color: colors.brandPrimary.withValues(alpha: 0.14),
-                    shape: BoxShape.circle,
+                    color: colors.brand.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: colors.brand.withValues(alpha: 0.35),
+                    ),
                   ),
                   child: Icon(
                     Icons.support_agent_rounded,
-                    size: 32,
-                    color: colors.brandPrimary,
+                    size: 34,
+                    color: colors.brand,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 CustomText(
                   l10n.staffModalTitle,
                   fontSize: 20,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w700,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
                 CustomText(
                   l10n.staffModalMessage(config.cartNumber, config.locationName),
                   fontSize: 14,
-                  color: colors.secondaryText,
+                  color: colors.textSecondary,
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 24),
                 Row(
                   children: [
                     Expanded(

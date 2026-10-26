@@ -98,50 +98,37 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  RepaintBoundary(
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: colors.weightVerified.withValues(alpha: 0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        size: 40,
-                        color: colors.weightVerified,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  const _SuccessBurst(),
+                  const SizedBox(height: 14),
                   CustomText(
                     l10n.paymentSuccess,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
                   CustomText(
                     l10n.paymentSuccessSubtitle,
                     fontSize: 14,
-                    color: colors.secondaryText,
+                    color: colors.textSecondary,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   CustomText(
                     totalLabel,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: colors.weightVerified,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: colors.verified,
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
                   RepaintBoundary(
                     child: Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: colors.textFieldFill,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colors.containerBorder),
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: colors.border),
                       ),
                       child: Column(
                         children: [
@@ -149,42 +136,51 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(14),
                             ),
                             child: QrImageView(
                               data: qrData,
                               version: QrVersions.auto,
-                              size: 185,
+                              size: 190,
                               backgroundColor: Colors.white,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          CustomText(
-                            l10n.exitPass,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: colors.weightVerified,
-                            textAlign: TextAlign.center,
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 16,
+                                color: colors.verified,
+                              ),
+                              const SizedBox(width: 6),
+                              CustomText(
+                                l10n.exitPass,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: colors.verified,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 6),
                           CustomText(
                             l10n.receiptHint,
                             fontSize: 12,
-                            color: colors.secondaryText,
+                            color: colors.textSecondary,
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.surface,
+                              color: colors.surfaceAlt,
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: colors.containerBorder.withValues(alpha: 0.7),
-                              ),
+                              border: Border.all(color: colors.border),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -192,7 +188,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                                 CustomText(
                                   '${l10n.receiptHashLabel}: ',
                                   fontSize: 11,
-                                  color: colors.secondaryText,
+                                  color: colors.textSecondary,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 Flexible(
@@ -201,7 +197,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                                         ? widget.sessionId
                                         : widget.receiptHash,
                                     fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                                    fontWeight: FontWeight.w700,
                                     maxLines: 1,
                                   ),
                                 ),
@@ -212,12 +208,18 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   CustomText(
                     l10n.autoResetHint(_secondsLeft),
                     fontSize: 12,
-                    color: colors.secondaryText,
+                    color: colors.textSecondary,
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  _CountdownBar(
+                    secondsLeft: _secondsLeft,
+                    totalSeconds: _autoResetSeconds,
+                    paused: _isPaused,
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -228,8 +230,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                           icon: _isPaused
                               ? Icons.play_arrow_rounded
                               : Icons.pause_circle_outline_rounded,
-                          variant: KioskButtonVariant.outlined,
-                          onPressed: () => setState(() => _isPaused = !_isPaused),
+                          variant: KioskButtonVariant.secondary,
+                          onPressed: () =>
+                              setState(() => _isPaused = !_isPaused),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -249,6 +252,112 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// One-shot success moment: the check badge scales in with a soft overshoot
+/// while an emerald ring expands and fades — the payment flow's finale.
+class _SuccessBurst extends StatelessWidget {
+  const _SuccessBurst();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeOutBack,
+      builder: (context, t, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            // Expanding halo ring.
+            Opacity(
+              opacity: (1 - t).clamp(0.0, 1.0),
+              child: Container(
+                width: 70 + t * 60,
+                height: 70 + t * 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: colors.verified.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+            Transform.scale(
+              scale: t.clamp(0.0, 1.0),
+              child: child,
+            ),
+          ],
+        );
+      },
+      child: RepaintBoundary(
+        child: Container(
+          width: 74,
+          height: 74,
+          decoration: BoxDecoration(
+            color: colors.verified.withValues(alpha: 0.14),
+            shape: BoxShape.circle,
+            border: Border.all(color: colors.verified.withValues(alpha: 0.4)),
+          ),
+          child: Icon(
+            Icons.check_circle_rounded,
+            size: 44,
+            color: colors.verified,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Smoothly draining countdown bar — one linear second of animation per tick.
+class _CountdownBar extends StatelessWidget {
+  const _CountdownBar({
+    required this.secondsLeft,
+    required this.totalSeconds,
+    required this.paused,
+  });
+
+  final int secondsLeft;
+  final int totalSeconds;
+  final bool paused;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final fraction = (secondsLeft / totalSeconds).clamp(0.0, 1.0);
+    return TweenAnimationBuilder<double>(
+      // Keyed on the tick only: pausing must hold the bar where it is, not
+      // replay a fill.
+      key: ValueKey('countdown-$secondsLeft'),
+      tween: Tween(begin: 1, end: fraction),
+      duration: const Duration(seconds: 1),
+      curve: Curves.linear,
+      builder: (context, value, _) {
+        return Container(
+          height: 6,
+          decoration: BoxDecoration(
+            color: colors.surfaceAlt,
+            borderRadius: BorderRadius.circular(3),
+          ),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FractionallySizedBox(
+              widthFactor: value.clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: paused ? colors.textFaint : colors.brand,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

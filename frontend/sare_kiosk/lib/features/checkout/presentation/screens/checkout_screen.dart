@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/kiosk_config_exports.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/kiosk_formatter.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
@@ -51,7 +52,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _confirm() async {
-    final ok = await context.read<CartCubit>().checkout(paymentMethod: _selectedMethod);
+    final ok =
+        await context.read<CartCubit>().checkout(paymentMethod: _selectedMethod);
     if (!ok || !mounted) return;
     final checkout = context.read<SessionCubit>().state.checkout;
     if (checkout == null) return;
@@ -126,13 +128,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             Widget? banner;
             if (cartState.bannerKind == WeightBannerKind.mismatch) {
               banner = KioskStatusBanner(
+                key: ValueKey('banner-mismatch-${cartState.bannerMessage}'),
                 message: cartState.bannerMessage ?? l10n.networkError,
                 status: KioskBannerStatus.discrepancy,
               );
             }
 
             final shopperLabel = session.isMember
-                ? l10n.memberShopperBadge(session.userName ?? session.nfcUid ?? '')
+                ? l10n.memberShopperBadge(
+                    session.userName ?? session.nfcUid ?? '')
                 : l10n.guestShopperBadge;
 
             return KioskScaffold(
@@ -142,12 +146,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               floatingBanner: banner,
               extraStatusBadge: KioskStatusBadge(
                 leading: Icon(
-                  session.isMember ? Icons.verified_user_rounded : Icons.person_outline_rounded,
+                  session.isMember
+                      ? Icons.verified_user_rounded
+                      : Icons.person_outline_rounded,
                   size: 16,
-                  color: session.isMember ? colors.weightVerified : colors.secondaryText,
+                  color:
+                      session.isMember ? colors.verified : colors.textSecondary,
                 ),
                 label: shopperLabel,
-                borderColor: colors.containerBorder,
               ),
               body: LayoutBuilder(
                 builder: (context, constraints) {
@@ -166,20 +172,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 CustomText(
                                   l10n.checkoutTitle,
                                   fontSize: 22,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w800,
                                 ),
                                 const SizedBox(height: 2),
                                 CustomText(
                                   '${l10n.itemsCount(session.itemsCount)} • $totalWeightLabel',
                                   fontSize: 13,
-                                  color: colors.secondaryText,
+                                  color: colors.textSecondary,
                                 ),
                               ],
                             ),
                             CustomText(
                               totalLabel,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              color: colors.brand,
                             ),
                           ],
                         ),
@@ -271,7 +278,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       shrinkWrap: shrinkWrap,
       physics: shrinkWrap ? const NeverScrollableScrollPhysics() : null,
       itemCount: session.items.length,
-      separatorBuilder: (_, _) => Divider(height: 14, color: colors.dividerColor),
+      separatorBuilder: (_, _) =>
+          Divider(height: 14, color: colors.border),
       itemBuilder: (context, index) {
         final item = session.items[index];
         final price = Money.formatMinor(
@@ -279,7 +287,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           locale,
           symbol: ' ${l10n.currencySymbol}',
         );
-        final weight = KioskFormatter.formatWeight(item.expectedWeightG.toDouble(), locale);
+        final weight = KioskFormatter.formatWeight(
+          item.expectedWeightG.toDouble(),
+          locale,
+        );
         return Row(
           children: [
             Expanded(
@@ -295,7 +306,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   CustomText(
                     '${item.barcode} • $weight',
                     fontSize: 11,
-                    color: colors.secondaryText,
+                    color: colors.textFaint,
                   ),
                 ],
               ),
@@ -315,43 +326,56 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: colors.textFieldFill,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.containerBorder),
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
           children: [
-            CustomText(
-              l10n.orderItemsHeading,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
+            Row(
+              children: [
+                Icon(
+                  Icons.receipt_long_rounded,
+                  size: 16,
+                  color: colors.brand,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: CustomText(
+                    l10n.orderItemsHeading,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             if (shrinkWrap) itemsList else Expanded(child: itemsList),
-            const Divider(height: 22),
+            Divider(height: 22, color: colors.border),
             _kv(l10n.totalBasketWeight, totalWeightLabel, colors),
             const SizedBox(height: 6),
             _kv(l10n.subtotal, subLabel, colors),
             const SizedBox(height: 6),
             _kv(l10n.tax, vatLabel, colors),
-            const Divider(height: 20),
+            Divider(height: 20, color: colors.border),
             Row(
               children: [
                 Expanded(
                   child: CustomText(
                     l10n.orderTotal,
                     fontSize: 15,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w700,
                     maxLines: 1,
                   ),
                 ),
                 const SizedBox(width: 8),
                 CustomText(
                   totalLabel,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
                   maxLines: 1,
                 ),
               ],
@@ -394,30 +418,48 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             colors: colors,
           ),
           const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: colors.weightVerified.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: colors.weightVerified.withValues(alpha: 0.35)),
+          AnimatedSwitcher(
+            duration: AppTypography.base,
+            switchInCurve: AppTypography.enterCurve,
+            switchOutCurve: AppTypography.exitCurve,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.15),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
             ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.verified_user_outlined,
-                  size: 20,
-                  color: colors.weightVerified,
+            child: Container(
+              key: ValueKey(_selectedMethod),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colors.verified.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colors.verified.withValues(alpha: 0.30),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: CustomText(
-                    _instructionForMethod(l10n, cartNumber),
-                    fontSize: 12,
-                    color: colors.weightVerified,
-                    fontWeight: FontWeight.w600,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.verified_user_outlined,
+                    size: 20,
+                    color: colors.verified,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: CustomText(
+                      _instructionForMethod(l10n, cartNumber),
+                      fontSize: 12,
+                      color: colors.verified,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 18),
@@ -427,18 +469,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 child: KioskButton(
                   text: l10n.cancelCheckout,
                   icon: Icons.arrow_back_rounded,
-                  variant: KioskButtonVariant.outlined,
+                  variant: KioskButtonVariant.secondary,
                   onPressed: () {
                     if (context.canPop()) {
                       context.pop();
                     } else {
-                      context.go('${AppRoutes.cart}?sessionId=${widget.sessionId}');
+                      context.go(
+                          '${AppRoutes.cart}?sessionId=${widget.sessionId}');
                     }
                   },
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
+                flex: 2,
                 child: KioskButton(
                   text: l10n.confirm,
                   icon: Icons.check_circle_outline_rounded,
@@ -460,7 +504,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           child: CustomText(
             k,
             fontSize: 13,
-            color: colors.secondaryText,
+            color: colors.textSecondary,
             maxLines: 1,
           ),
         ),
@@ -469,7 +513,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           v,
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: colors.secondaryText,
+          color: colors.textSecondary,
           maxLines: 1,
         ),
       ],
@@ -489,30 +533,48 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: InkWell(
         onTap: () => setState(() => _selectedMethod = value),
         borderRadius: BorderRadius.circular(14),
-        child: Container(
+        child: AnimatedContainer(
+          duration: AppTypography.base,
+          curve: AppTypography.enterCurve,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           decoration: BoxDecoration(
-            color: selected ? primary.withValues(alpha: 0.08) : colors.textFieldFill,
+            color: selected
+                ? primary.withValues(alpha: 0.08)
+                : colors.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? primary : colors.containerBorder,
-              width: selected ? 1.6 : 1.0,
+              color: selected ? primary : colors.border,
+              width: selected ? 1.8 : 1.2,
             ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: context.colors.brandGlow,
+                      blurRadius: 16,
+                      offset: const Offset(0, 5),
+                      spreadRadius: -4,
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
+              AnimatedContainer(
+                duration: AppTypography.base,
+                curve: AppTypography.enterCurve,
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? primary.withValues(alpha: 0.14)
-                      : colors.containerBorder.withValues(alpha: 0.22),
-                  shape: BoxShape.circle,
+                  gradient: selected ? context.colors.brandGradient : null,
+                  color: selected ? null : colors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(11),
+                  border: selected ? null : Border.all(color: colors.border),
                 ),
                 child: Icon(
                   icon,
-                  size: 18,
-                  color: selected ? primary : colors.secondaryText,
+                  size: 19,
+                  color: selected
+                      ? context.colors.onBrand
+                      : colors.textSecondary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -523,12 +585,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Icon(
-                selected
-                    ? Icons.radio_button_checked_rounded
-                    : Icons.radio_button_off_rounded,
-                size: 20,
-                color: selected ? primary : colors.secondaryText,
+              AnimatedScale(
+                scale: selected ? 1 : 0.85,
+                duration: AppTypography.fast,
+                curve: AppTypography.enterCurve,
+                child: Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  size: 22,
+                  color: selected ? primary : colors.textFaint,
+                ),
               ),
             ],
           ),
