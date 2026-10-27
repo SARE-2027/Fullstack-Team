@@ -10,6 +10,18 @@ abstract final class Money {
     return NumberFormat.currency(locale: loc, symbol: symbol, decimalDigits: 2).format(major);
   }
 
+  /// Splits a minor amount into the raw localized amount string and the
+  /// currency marker, so [KioskPriceText] can render the premium
+  /// large-number + small-raised-symbol composition.
+  static ({String amount, String symbol}) formatMinorSplit(
+    int minor,
+    String localeCode, {
+    required String symbol,
+  }) {
+    final amount = formatMinor(minor, localeCode, symbol: '').trim();
+    return (amount: amount, symbol: symbol);
+  }
+
   /// 14% VAT included model: vat = total - subtotal, but shown explicitly at checkout.
   static ({int subtotalMinor, int vatMinor}) splitVat(int totalMinor, {double vatRate = 0.14}) {
     // total already includes VAT; derive subtotal = total / (1 + vatRate)

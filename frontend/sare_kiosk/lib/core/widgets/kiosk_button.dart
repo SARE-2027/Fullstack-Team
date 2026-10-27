@@ -43,6 +43,20 @@ class _KioskButtonState extends State<KioskButton> {
 
   bool get _enabled => widget.onPressed != null && !widget.isLoading;
 
+  /// Top-sheen strength per variant — strongest on the filled CTAs.
+  double get _sheenAlpha {
+    switch (widget.variant) {
+      case KioskButtonVariant.primary:
+        return 0.16;
+      case KioskButtonVariant.danger:
+        return 0.14;
+      case KioskButtonVariant.secondary:
+        return 0.05;
+      case KioskButtonVariant.outlined:
+        return 0.0;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -166,6 +180,19 @@ class _KioskButtonState extends State<KioskButton> {
                   borderSide ?? BorderSide.none,
                 ),
                 boxShadow: _pressed ? [] : glow,
+              ),
+              // Rim light: a faint top sheen that makes the button read as
+              // physical hardware lit from above.
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(widget.borderRadius),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: const Alignment(0, 0.45),
+                  colors: [
+                    Colors.white.withValues(alpha: _sheenAlpha),
+                    Colors.white.withValues(alpha: 0.0),
+                  ],
+                ),
               ),
               child: AnimatedOpacity(
                 duration: AppTypography.base,

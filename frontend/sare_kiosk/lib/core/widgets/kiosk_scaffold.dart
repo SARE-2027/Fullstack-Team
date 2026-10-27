@@ -64,20 +64,34 @@ class KioskScaffold extends StatelessWidget {
           } catch (_) {}
         };
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       body: DecoratedBox(
+        // Vertical depth: the screen dims slightly toward the floor so
+        // floating panels read as lit from above.
         decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          gradient: RadialGradient(
-            center: const Alignment(0.0, -1.35),
-            radius: 1.15,
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: [
-              colors.brandGlow.withValues(alpha: 0.5),
-              colors.brandGlow.withValues(alpha: 0.0),
+              Theme.of(context).scaffoldBackgroundColor,
+              isDark ? const Color(0xFF0A0D12) : const Color(0xFFEDF0F4),
             ],
           ),
         ),
-        child: SafeArea(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(0.0, -1.35),
+              radius: 1.15,
+              colors: [
+                colors.brandGlow.withValues(alpha: 0.5),
+                colors.brandGlow.withValues(alpha: 0.0),
+              ],
+            ),
+          ),
+          child: SafeArea(
           child: Column(
             children: [
               if (showHeader)
@@ -210,6 +224,7 @@ class KioskScaffold extends StatelessWidget {
               Expanded(child: body),
             ],
           ),
+        ),
         ),
       ),
     );

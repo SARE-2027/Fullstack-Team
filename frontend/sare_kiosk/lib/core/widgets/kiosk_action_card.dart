@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 import 'custom_text.dart';
+import 'kiosk_surface_card.dart';
 
 /// Reusable action & selection card for the kiosk workflow.
 ///
@@ -55,25 +56,15 @@ class _KioskActionCardState extends State<KioskActionCard> {
         duration: AppTypography.base,
         curve: AppTypography.enterCurve,
         transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
-        padding: widget.padding,
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(widget.borderRadius),
-          border: Border.all(
-            color: resolvedBorder,
-            width: resolvedBorderWidth,
-          ),
-          boxShadow: [
-            if (widget.isPrimary)
-              BoxShadow(
-                color: colors.brandGlow.withValues(alpha: _hovered ? 1 : 0.55),
-                blurRadius: _hovered ? 26 : 18,
-                offset: const Offset(0, 8),
-                spreadRadius: -6,
-              ),
-          ],
-        ),
-        child: Column(
+        child: KioskSurfaceCard(
+          padding: widget.padding,
+          borderRadius: widget.borderRadius,
+          borderColor: resolvedBorder,
+          borderWidth: resolvedBorderWidth,
+          glow: widget.isPrimary
+              ? colors.brandGlow.withValues(alpha: _hovered ? 1 : 0.55)
+              : null,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -150,6 +141,7 @@ class _KioskActionCardState extends State<KioskActionCard> {
               ],
             ),
           ],
+        ),
         ),
       ),
     );
