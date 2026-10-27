@@ -38,6 +38,12 @@ class SareKioskApp extends StatefulWidget {
 }
 
 class _SareKioskAppState extends State<SareKioskApp> {
+  /// Touch kiosk: no scrollbars anywhere — drag scrolling only. This also
+  /// prevents the desktop ScrollBehavior from wrapping scrollables that get
+  /// remounted inside AnimatedSize (detached ScrollPosition exception).
+  static final ScrollBehavior _kioskScrollBehavior =
+      const MaterialScrollBehavior().copyWith(scrollbars: false);
+
   late final ServiceLocator _locator;
   late final ThemeCubit _themeCubit;
   late final LocaleCubit _localeCubit;
@@ -98,6 +104,7 @@ class _SareKioskAppState extends State<SareKioskApp> {
                 return MaterialApp.router(
                   title: 'SARE Smart Kiosk',
                   debugShowCheckedModeBanner: false,
+                  scrollBehavior: _kioskScrollBehavior,
                   theme: AppTheme.lightTheme,
                   darkTheme: AppTheme.darkTheme,
                   themeMode: themeState.mode,

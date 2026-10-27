@@ -525,22 +525,19 @@ class _CartScreenState extends State<CartScreen> {
       );
     }
     return RepaintBoundary(
-      child: Scrollbar(
-        thumbVisibility: false,
-        child: ListView.separated(
-          itemCount: items.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return RepaintBoundary(
-              child: CartItemTile(
-                key: ValueKey(item.id),
-                item: item,
-                onRemove: () => context.read<CartCubit>().removeItem(item.id),
-              ),
-            );
-          },
-        ),
+      child: ListView.separated(
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return RepaintBoundary(
+            child: CartItemTile(
+              key: ValueKey(item.id),
+              item: item,
+              onRemove: () => context.read<CartCubit>().removeItem(item.id),
+            ),
+          );
+        },
       ),
     );
   }

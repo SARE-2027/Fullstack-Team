@@ -103,9 +103,7 @@ class _SensorSimulatorStripState extends State<SensorSimulatorStrip> {
                     padding: const EdgeInsets.only(top: 10),
                     child: SizedBox(
                       height: 118,
-                      child: Scrollbar(
-                        thumbVisibility: false,
-                        child: ListView.separated(
+                      child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: LocalSmartCartEngine.catalog.length,
                           separatorBuilder: (_, _) => const SizedBox(width: 10),
@@ -209,8 +207,7 @@ class _SensorSimulatorStripState extends State<SensorSimulatorStrip> {
                           },
                         ),
                       ),
-                    ),
-                  )
+                    )
                 : const SizedBox(width: double.infinity),
           ),
         ],

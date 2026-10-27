@@ -77,12 +77,6 @@ abstract final class AppTheme {
       circularTrackColor: AppColorTheme.dark.surfaceAlt,
       linearTrackColor: AppColorTheme.dark.surfaceAlt,
     ),
-    scrollbarTheme: ScrollbarThemeData(
-      thumbColor: WidgetStatePropertyAll(AppColorTheme.dark.borderStrong),
-      trackColor: const WidgetStatePropertyAll(Colors.transparent),
-      radius: const Radius.circular(8),
-      thickness: const WidgetStatePropertyAll(6),
-    ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: AppColorTheme.dark.brand,
       selectionColor: AppColorTheme.dark.brand.withValues(alpha: 0.30),
@@ -204,12 +198,6 @@ abstract final class AppTheme {
       color: AppColorTheme.light.brand,
       circularTrackColor: AppColorTheme.light.surfaceAlt,
       linearTrackColor: AppColorTheme.light.surfaceAlt,
-    ),
-    scrollbarTheme: ScrollbarThemeData(
-      thumbColor: WidgetStatePropertyAll(AppColorTheme.light.borderStrong),
-      trackColor: const WidgetStatePropertyAll(Colors.transparent),
-      radius: const Radius.circular(8),
-      thickness: const WidgetStatePropertyAll(6),
     ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: AppColorTheme.light.brand,
