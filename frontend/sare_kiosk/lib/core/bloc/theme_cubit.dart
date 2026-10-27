@@ -15,7 +15,9 @@ class ThemeState extends Equatable {
 }
 
 class ThemeCubit extends Cubit<ThemeState> {
-  ThemeCubit([ThemeMode initial = ThemeMode.light]) : super(ThemeState(initial));
+  /// Dark is the kiosk's showroom identity: deep green-charcoal surfaces make
+  /// the emerald verification states pop under bright store lighting.
+  ThemeCubit([ThemeMode initial = ThemeMode.dark]) : super(ThemeState(initial));
 
   void toggle() {
     final next = state.mode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
