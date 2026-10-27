@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/kiosk_formatter.dart';
-import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/custom_text.dart';
+import '../../../../core/widgets/kiosk_price_text.dart';
+import '../../../../core/widgets/kiosk_surface_card.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../session/data/models/session_models.dart';
 import '../../data/repositories/local_smart_cart_engine.dart';
@@ -25,11 +26,6 @@ class CartItemTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).languageCode;
     final name = item.displayName(locale);
-    final priceLabel = Money.formatMinor(
-      item.unitPriceMinor,
-      locale,
-      symbol: ' ${l10n.currencySymbol}',
-    );
     final weightLabel =
         KioskFormatter.formatWeight(item.expectedWeightG.toDouble(), locale);
     final catalogMatch = LocalSmartCartEngine.findByBarcode(item.barcode);
@@ -46,22 +42,20 @@ class CartItemTile extends StatelessWidget {
           child: child,
         ),
       ),
-      child: Container(
+      child: KioskSurfaceCard(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border),
-        ),
+        borderRadius: 14,
         child: Row(
           children: [
             Container(
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: colors.surfaceAlt,
+                color: colors.brand.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: colors.border),
+                border: Border.all(
+                  color: colors.brand.withValues(alpha: 0.22),
+                ),
               ),
               child: _buildIcon(context, catalogMatch?.icon),
             ),
@@ -123,11 +117,7 @@ class CartItemTile extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                CustomText(
-                  priceLabel,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+                KioskPriceText(minor: item.unitPriceMinor, amountSize: 17),
                 if (onRemove != null) ...[
                   const SizedBox(height: 6),
                   Material(
@@ -181,7 +171,7 @@ class CartItemTile extends StatelessWidget {
       child: Icon(
         iconData ?? Icons.inventory_2_outlined,
         size: 24,
-        color: context.colors.brand.withValues(alpha: 0.9),
+        color: context.colors.brand,
       ),
     );
   }

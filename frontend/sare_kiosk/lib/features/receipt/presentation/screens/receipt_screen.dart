@@ -7,7 +7,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../session/presentation/cubit/session_cubit.dart';
@@ -75,13 +74,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final locale = Localizations.localeOf(context).languageCode;
     final colors = context.colors;
-    final totalLabel = Money.formatMinor(
-      widget.totalMinor,
-      locale,
-      symbol: ' ${l10n.currencySymbol}',
-    );
     final qrData = widget.receiptHash.isNotEmpty
         ? widget.receiptHash
         : 'SARE:${widget.sessionId}';
@@ -99,7 +92,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
               child: Column(
                 children: [
                   const _SuccessBurst(),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   CustomText(
                     l10n.paymentSuccess,
                     fontSize: 24,
@@ -114,34 +107,24 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  CustomText(
-                    totalLabel,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: colors.verified,
-                    textAlign: TextAlign.center,
+                  KioskPriceText(
+                    minor: widget.totalMinor,
+                    amountSize: 27,
+                    amountColor: colors.verified,
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   RepaintBoundary(
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: colors.surface,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: colors.border),
-                      ),
+                    child: KioskSurfaceCard(
+                      padding: const EdgeInsets.all(18),
+                      borderRadius: 18,
                       child: Column(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                          _QrViewfinder(
+                            cornerColor: colors.brand,
                             child: QrImageView(
                               data: qrData,
                               version: QrVersions.auto,
-                              size: 190,
+                              size: 172,
                               backgroundColor: Colors.white,
                             ),
                           ),
@@ -208,7 +191,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   CustomText(
                     l10n.autoResetHint(_secondsLeft),
                     fontSize: 12,
@@ -221,7 +204,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     totalSeconds: _autoResetSeconds,
                     paused: _isPaused,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -254,6 +237,91 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       ),
     );
   }
+}
+
+/// Frames the exit-pass QR with scanner viewfinder corners — an affordance
+/// that says "aim your camera here", painted as four rounded L-strokes.
+class _QrViewfinder extends StatelessWidget {
+  const _QrViewfinder({required this.cornerColor, required this.child});
+
+  final Color cornerColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: CustomPaint(
+        foregroundPainter: _ViewfinderCornersPainter(color: cornerColor),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _ViewfinderCornersPainter extends CustomPainter {
+  _ViewfinderCornersPainter({required this.color});
+
+  final Color color;
+
+  static const double _arm = 18;
+  static const double _stroke = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _stroke
+      ..strokeCap = StrokeCap.round;
+
+    const inset = _stroke / 2 + 1;
+    final rect = Rect.fromLTWH(
+      inset,
+      inset,
+      size.width - inset * 2,
+      size.height - inset * 2,
+    );
+
+    void corner(Path path, Offset p, double dx, double dy) {
+      path.moveTo(p.dx + dx * _arm, p.dy);
+      path.lineTo(p.dx, p.dy);
+      path.lineTo(p.dx, p.dy + dy * _arm);
+    }
+
+    final path = Path();
+    // Top-left, top-right, bottom-right, bottom-left.
+    corner(path, rect.topLeft, 1, 1);
+    corner(path, rect.topRight, -1, 1);
+    corner(path, rect.bottomRight, -1, -1);
+    corner(path, rect.bottomLeft, 1, -1);
+    canvas.drawPath(path, paint);
+
+    // Quiet center tick marks help the eye find the code.
+    final tick = Paint()
+      ..color = color.withValues(alpha: 0.35)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    final midY = rect.center.dy;
+    canvas.drawLine(
+      Offset(rect.left + 4, midY),
+      Offset(rect.left + 12, midY),
+      tick,
+    );
+    canvas.drawLine(
+      Offset(rect.right - 12, midY),
+      Offset(rect.right - 4, midY),
+      tick,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ViewfinderCornersPainter oldDelegate) =>
+      color != oldDelegate.color;
 }
 
 /// One-shot success moment: the check badge scales in with a soft overshoot

@@ -471,12 +471,9 @@ class _CartScreenState extends State<CartScreen> {
   ) {
     final items = session.items;
     if (items.isEmpty) {
-      return Container(
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
-        ),
+      return KioskSurfaceCard(
+        borderRadius: 18,
+        padding: EdgeInsets.zero,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),

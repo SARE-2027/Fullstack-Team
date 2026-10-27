@@ -6,7 +6,10 @@ import '../../../../core/utils/kiosk_motion.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/custom_text.dart';
 import '../../../../core/widgets/kiosk_button.dart';
+import '../../../../core/widgets/kiosk_price_text.dart';
 import '../../../../core/widgets/kiosk_pulse_dot.dart';
+import '../../../../core/widgets/kiosk_section_label.dart';
+import '../../../../core/widgets/kiosk_surface_card.dart';
 import '../../../../l10n/app_localizations.dart';
 
 /// Side-panel summary: live load-cell telemetry, VAT breakdown, and the
@@ -44,21 +47,12 @@ class CartSummaryBar extends StatelessWidget {
       locale,
       symbol: ' ${l10n.currencySymbol}',
     );
-    final tot = Money.formatMinor(
-      totalMinor,
-      locale,
-      symbol: ' ${l10n.currencySymbol}',
-    );
     final weightFormatted =
         KioskFormatter.formatWeight(totalWeightG.toDouble(), locale);
 
-    return Container(
+    return KioskSurfaceCard(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border, width: 1.2),
-      ),
+      borderRadius: 18,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -152,19 +146,17 @@ class CartSummaryBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              CustomText(
-                tot,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                maxLines: 1,
-              ),
+              KioskPriceText(minor: totalMinor, amountSize: 26),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _row(l10n.subtotal, sub, colors),
           const SizedBox(height: 6),
           _row(l10n.tax, vat, colors),
-          const Divider(height: 20),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: KioskHairlineDivider(),
+          ),
           Row(
             children: [
               Expanded(
@@ -176,12 +168,10 @@ class CartSummaryBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              CustomText(
-                tot,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: colors.brand,
-                maxLines: 1,
+              KioskPriceText(
+                minor: totalMinor,
+                amountSize: 20,
+                amountColor: colors.brand,
               ),
             ],
           ),

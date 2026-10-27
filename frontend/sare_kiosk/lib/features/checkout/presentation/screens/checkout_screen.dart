@@ -105,11 +105,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
             final totalMinor = session.totalMinor;
             final split = Money.splitVat(totalMinor);
-            final totalLabel = Money.formatMinor(
-              totalMinor,
-              locale,
-              symbol: ' ${l10n.currencySymbol}',
-            );
             final subLabel = Money.formatMinor(
               split.subtotalMinor,
               locale,
@@ -182,11 +177,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 ),
                               ],
                             ),
-                            CustomText(
-                              totalLabel,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                              color: colors.brand,
+                            KioskPriceText(
+                              minor: totalMinor,
+                              amountSize: 28,
+                              amountColor: colors.brand,
                             ),
                           ],
                         ),
@@ -206,7 +200,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         colors: colors,
                                         subLabel: subLabel,
                                         vatLabel: vatLabel,
-                                        totalLabel: totalLabel,
+                                        totalMinor: totalMinor,
                                         totalWeightLabel: totalWeightLabel,
                                       ),
                                     ),
@@ -234,7 +228,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         colors: colors,
                                         subLabel: subLabel,
                                         vatLabel: vatLabel,
-                                        totalLabel: totalLabel,
+                                        totalMinor: totalMinor,
                                         totalWeightLabel: totalWeightLabel,
                                         shrinkWrap: true,
                                       ),
@@ -270,7 +264,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     required AppColorTheme colors,
     required String subLabel,
     required String vatLabel,
-    required String totalLabel,
+    required int totalMinor,
     required String totalWeightLabel,
     bool shrinkWrap = false,
   }) {
@@ -323,44 +317,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
 
     return RepaintBoundary(
-      child: Container(
+      child: KioskSurfaceCard(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
-        ),
+        borderRadius: 18,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.receipt_long_rounded,
-                  size: 16,
-                  color: colors.brand,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: CustomText(
-                    l10n.orderItemsHeading,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    maxLines: 1,
-                  ),
-                ),
-              ],
+            KioskSectionLabel(
+              l10n.orderItemsHeading,
+              accent: colors.brand,
             ),
             const SizedBox(height: 10),
             if (shrinkWrap) itemsList else Expanded(child: itemsList),
-            Divider(height: 22, color: colors.border),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 11),
+              child: KioskHairlineDivider(),
+            ),
             _kv(l10n.totalBasketWeight, totalWeightLabel, colors),
             const SizedBox(height: 6),
             _kv(l10n.subtotal, subLabel, colors),
             const SizedBox(height: 6),
             _kv(l10n.tax, vatLabel, colors),
-            Divider(height: 20, color: colors.border),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: KioskHairlineDivider(),
+            ),
             Row(
               children: [
                 Expanded(
@@ -372,12 +354,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                CustomText(
-                  totalLabel,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                  maxLines: 1,
-                ),
+                KioskPriceText(minor: totalMinor, amountSize: 21),
               ],
             ),
           ],
@@ -533,30 +510,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       child: InkWell(
         onTap: () => setState(() => _selectedMethod = value),
         borderRadius: BorderRadius.circular(14),
-        child: AnimatedContainer(
-          duration: AppTypography.base,
-          curve: AppTypography.enterCurve,
+        child: KioskSurfaceCard(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-          decoration: BoxDecoration(
-            color: selected
-                ? primary.withValues(alpha: 0.08)
-                : colors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? primary : colors.border,
-              width: selected ? 1.8 : 1.2,
-            ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: context.colors.brandGlow,
-                      blurRadius: 16,
-                      offset: const Offset(0, 5),
-                      spreadRadius: -4,
-                    ),
-                  ]
-                : null,
-          ),
+          borderRadius: 14,
+          borderColor: selected ? primary : null,
+          borderWidth: selected ? 1.8 : 1.2,
+          glow: selected ? context.colors.brandGlow : null,
           child: Row(
             children: [
               AnimatedContainer(

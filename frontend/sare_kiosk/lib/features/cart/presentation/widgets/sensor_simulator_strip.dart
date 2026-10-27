@@ -5,6 +5,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/kiosk_formatter.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/custom_text.dart';
+import '../../../../core/widgets/kiosk_surface_card.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/local_smart_cart_engine.dart';
 
@@ -40,13 +41,9 @@ class _SensorSimulatorStripState extends State<SensorSimulatorStrip> {
     final colors = context.colors;
     final locale = Localizations.localeOf(context).languageCode;
 
-    return Container(
+    return KioskSurfaceCard(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border),
-      ),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

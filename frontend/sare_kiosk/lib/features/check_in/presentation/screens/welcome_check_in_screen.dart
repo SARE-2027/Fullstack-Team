@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/kiosk_config_exports.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/kiosk_motion.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../cart/data/repositories/local_smart_cart_engine.dart';
@@ -148,10 +149,13 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
                           _entranceSlot(
                             const Interval(0.0, 0.45, curve: Curves.easeOutCubic),
                             child: RepaintBoundary(
-                              child: _BrandMark(colors: colors),
+                              child: KioskBrandMark(
+                                size: 150,
+                                animate: KioskMotion.ambientEnabled(context),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 26),
                           _entranceSlot(
                             const Interval(0.12, 0.55, curve: Curves.easeOutCubic),
                             child: AnimatedSwitcher(
@@ -161,9 +165,9 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
                               child: CustomText(
                                 l10n.appName,
                                 key: ValueKey(l10n.appName),
-                                fontSize: 34,
+                                fontSize: 36,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
+                                letterSpacing: -0.5,
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -296,48 +300,6 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
           ),
         );
       },
-    );
-  }
-}
-
-/// SARE brand mark: emerald gradient squircle inside a quiet ring —
-/// the single ornamental element on the welcome screen.
-class _BrandMark extends StatelessWidget {
-  const _BrandMark({required this.colors});
-
-  final AppColorTheme colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: colors.brand.withValues(alpha: 0.28)),
-      ),
-      child: Container(
-        width: 78,
-        height: 78,
-        decoration: BoxDecoration(
-          gradient: colors.brandGradient,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: [
-            BoxShadow(
-              color: colors.brandGlow,
-              blurRadius: 30,
-              offset: const Offset(0, 10),
-              spreadRadius: -4,
-            ),
-          ],
-        ),
-        child: const Center(
-          child: Icon(
-            Icons.shopping_cart_checkout_rounded,
-            size: 40,
-            color: Colors.white,
-          ),
-        ),
-      ),
     );
   }
 }

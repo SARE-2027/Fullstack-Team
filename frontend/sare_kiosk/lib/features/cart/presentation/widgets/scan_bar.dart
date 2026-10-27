@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/custom_text.dart';
 import '../../../../core/widgets/kiosk_button.dart';
+import '../../../../core/widgets/kiosk_section_label.dart';
+import '../../../../core/widgets/kiosk_surface_card.dart';
 import '../../../../core/widgets/kiosk_text_field.dart';
 import '../../../../l10n/app_localizations.dart';
 
@@ -42,34 +44,15 @@ class _ScanBarState extends State<ScanBar> {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.colors;
 
-    return Container(
+    return KioskSurfaceCard(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.border),
-      ),
+      borderRadius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.qr_code_scanner_rounded,
-                size: 16,
-                color: colors.brand,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: CustomText(
-                  l10n.scanPrompt,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: colors.textSecondary,
-                  maxLines: 1,
-                ),
-              ),
-            ],
+          KioskSectionLabel(
+            l10n.scanPrompt,
+            accent: colors.brand,
           ),
           const SizedBox(height: 12),
           Row(
@@ -117,10 +100,22 @@ class _ScanBarState extends State<ScanBar> {
             ],
           ),
           const SizedBox(height: 10),
-          CustomText(
-            l10n.verifyWeightHint,
-            fontSize: 12,
-            color: colors.textFaint,
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline_rounded,
+                size: 13,
+                color: colors.textFaint,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: CustomText(
+                  l10n.verifyWeightHint,
+                  fontSize: 12,
+                  color: colors.textFaint,
+                ),
+              ),
+            ],
           ),
         ],
       ),
