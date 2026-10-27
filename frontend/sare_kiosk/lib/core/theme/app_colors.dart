@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 
 /// SARE "Fresh-Verify" design tokens.
 ///
-/// The entire interface stays quiet — charcoal/porcelain monochrome surfaces —
-/// and COLOR MEANS VERIFICATION: emerald = verified / go, amber = attention,
-/// red = weight mismatch / stop. Emerald doubles as the brand color because
-/// weight verification is the product's core promise.
+/// Royal blue is the brand — trust, checkout, primary actions. Neutral
+/// charcoal surfaces stay quiet so color carries meaning: emerald = the ±15g
+/// weight gate passed ("go"), amber = attention, red = mismatch ("stop").
+/// Green is a signal, never a decoration — it appears only on verification
+/// states and never as a fill larger than a badge.
 @immutable
 class AppColorTheme extends ThemeExtension<AppColorTheme> {
   const AppColorTheme({
@@ -30,7 +31,7 @@ class AppColorTheme extends ThemeExtension<AppColorTheme> {
     required this.scrim,
   });
 
-  // ── Neutral surfaces (quiet monochrome) ──────────────────────────────────
+  // ── Neutral surfaces (quiet charcoal — no color undertone) ───────────────
   /// Card / panel background.
   final Color surface;
 
@@ -50,18 +51,21 @@ class AppColorTheme extends ThemeExtension<AppColorTheme> {
   final Color textSecondary;
   final Color textFaint;
 
-  // ── Brand / verification semantic colors ─────────────────────────────────
-  /// Primary interactive + "verified" state color.
+  // ── Brand (royal blue) ───────────────────────────────────────────────────
+  /// Brand for text & icons — light enough on dark surfaces for ≥4.5:1.
   final Color brand;
+
+  /// Brand for fills (buttons, chips) — deep enough for white text.
   final Color brandDeep;
   final Color onBrand;
   final Color brandGradientStart;
   final Color brandGradientEnd;
 
-  /// Soft glow used behind primary CTAs and focus rings.
+  /// Soft glow used behind primary CTAs, focus rings and the ambient wash.
   final Color brandGlow;
 
-  /// Weight verified (±15g gate passed) — "go".
+  // ── Verification semantics ───────────────────────────────────────────────
+  /// Weight verified (±15g gate passed) — "go". Signal only, never a fill.
   final Color verified;
 
   /// Attention — session issues, degraded hardware.
@@ -87,51 +91,51 @@ class AppColorTheme extends ThemeExtension<AppColorTheme> {
       );
 
   /// Dark mode palette — default for the 10.1" supermarket touchscreen.
-  /// Deep charcoal with a green undertone (never pure black) so emerald
-  /// status reads instantly under bright store lighting.
+  /// Neutral charcoal surfaces keep the royal-blue CTAs and the green
+  /// verification signals unambiguous under bright store lighting.
   static const dark = AppColorTheme(
-    surface: Color(0xFF141C18),
-    surfaceAlt: Color(0xFF1B2620),
-    surfaceRaised: Color(0xFF212E27),
-    border: Color(0xFF2C3B33),
-    borderStrong: Color(0xFF41574B),
-    textSecondary: Color(0xFF9FB3A8),
-    textFaint: Color(0xFF6E8278),
-    brand: Color(0xFF34D399),
-    brandDeep: Color(0xFF059669),
-    onBrand: Color(0xFF052E20),
-    brandGradientStart: Color(0xFF059669),
-    brandGradientEnd: Color(0xFF34D399),
-    brandGlow: Color(0x332ED596),
+    surface: Color(0xFF161A20),
+    surfaceAlt: Color(0xFF1D222A),
+    surfaceRaised: Color(0xFF232932),
+    border: Color(0xFF2A303A),
+    borderStrong: Color(0xFF3D4552),
+    textSecondary: Color(0xFFA6B0BC),
+    textFaint: Color(0xFF7E8898),
+    brand: Color(0xFF60A5FA),
+    brandDeep: Color(0xFF2563EB),
+    onBrand: Color(0xFFFFFFFF),
+    brandGradientStart: Color(0xFF2563EB),
+    brandGradientEnd: Color(0xFF2F6FF0),
+    brandGlow: Color(0x332563EB),
     verified: Color(0xFF34D399),
     warning: Color(0xFFFBBF24),
     danger: Color(0xFFF87171),
     onDanger: Color(0xFF2A0B0B),
     info: Color(0xFF38BDF8),
-    scrim: Color(0xB30A100D),
+    scrim: Color(0xB3050A10),
   );
 
-  /// Light mode palette — porcelain with a green hint, crisp daytime option.
+  /// Light mode palette — crisp porcelain daytime option.
   static const light = AppColorTheme(
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFECF3EE),
-    surfaceRaised: Color(0xFFE3EDE6),
-    border: Color(0xFFD8E4DC),
-    borderStrong: Color(0xFFB4CBBE),
-    textSecondary: Color(0xFF56705F),
-    textFaint: Color(0xFF8AA394),
-    brand: Color(0xFF047857),
-    brandDeep: Color(0xFF059669),
+    surfaceAlt: Color(0xFFEEF0F4),
+    surfaceRaised: Color(0xFFE5E8EE),
+    border: Color(0xFFDFE3E9),
+    borderStrong: Color(0xFFBCC4D0),
+    textSecondary: Color(0xFF566070),
+    textFaint: Color(0xFF6B7480),
+    brand: Color(0xFF1D4ED8),
+    brandDeep: Color(0xFF2563EB),
     onBrand: Color(0xFFFFFFFF),
-    brandGradientStart: Color(0xFF059669),
-    brandGradientEnd: Color(0xFF0AAF7C),
-    brandGlow: Color(0x2E059669),
-    verified: Color(0xFF059669),
+    brandGradientStart: Color(0xFF1D4ED8),
+    brandGradientEnd: Color(0xFF2563EB),
+    brandGlow: Color(0x2E1D4ED8),
+    verified: Color(0xFF047857),
     warning: Color(0xFFB45309),
     danger: Color(0xFFDC2626),
     onDanger: Color(0xFFFFFFFF),
     info: Color(0xFF0369A1),
-    scrim: Color(0x66112219),
+    scrim: Color(0x6610141A),
   );
 
   @override

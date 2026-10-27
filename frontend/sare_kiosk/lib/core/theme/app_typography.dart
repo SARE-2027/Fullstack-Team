@@ -25,9 +25,9 @@ abstract final class AppTypography {
   /// from arm's length, generous hierarchy jumps between roles.
   static TextTheme createTextTheme(Brightness brightness) {
     final baseColor =
-        brightness == Brightness.dark ? const Color(0xFFF1F7F3) : const Color(0xFF11241B);
+        brightness == Brightness.dark ? const Color(0xFFF2F5F9) : const Color(0xFF10141A);
     final secondaryColor =
-        brightness == Brightness.dark ? const Color(0xFF9FB3A8) : const Color(0xFF56705F);
+        brightness == Brightness.dark ? const Color(0xFFA6B0BC) : const Color(0xFF566070);
 
     const fontFamily = englishFontFamily;
 

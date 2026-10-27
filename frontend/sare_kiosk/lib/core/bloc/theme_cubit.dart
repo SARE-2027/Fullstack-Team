@@ -15,8 +15,8 @@ class ThemeState extends Equatable {
 }
 
 class ThemeCubit extends Cubit<ThemeState> {
-  /// Dark is the kiosk's showroom identity: deep green-charcoal surfaces make
-  /// the emerald verification states pop under bright store lighting.
+  /// Dark is the kiosk's showroom identity: neutral charcoal surfaces with a
+  /// royal-blue accent keep the verification signals crisp in store lighting.
   ThemeCubit([ThemeMode initial = ThemeMode.dark]) : super(ThemeState(initial));
 
   void toggle() {

@@ -5,23 +5,24 @@ import 'app_typography.dart';
 
 abstract final class AppTheme {
   /// Dark Theme: Primary mode for the 10.1" smart cart touchscreen.
-  /// Deep green-charcoal surfaces keep emerald verification states instant.
+  /// Neutral charcoal surfaces keep the royal-blue CTAs and the emerald
+  /// verification signals unambiguous.
   static final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: const Color(0xFF0C1310),
-    primaryColor: AppColorTheme.dark.brand,
+    scaffoldBackgroundColor: const Color(0xFF0E1116),
+    primaryColor: AppColorTheme.dark.brandDeep,
     cardColor: AppColorTheme.dark.surface,
     dividerColor: AppColorTheme.dark.border,
     splashColor: Colors.white.withValues(alpha: 0.06),
     highlightColor: Colors.white.withValues(alpha: 0.04),
     colorScheme: ColorScheme.dark(
       surface: AppColorTheme.dark.surface,
-      onSurface: const Color(0xFFF1F7F3),
+      onSurface: const Color(0xFFF2F5F9),
       surfaceContainerHighest: AppColorTheme.dark.surfaceAlt,
-      primary: AppColorTheme.dark.brand,
+      primary: AppColorTheme.dark.brandDeep,
       onPrimary: AppColorTheme.dark.onBrand,
-      secondary: const Color(0xFF0AAF7C),
+      secondary: AppColorTheme.dark.brandGradientEnd,
       onSecondary: AppColorTheme.dark.onBrand,
       error: AppColorTheme.dark.danger,
       onError: const Color(0xFF2A0B0B),
@@ -85,7 +86,7 @@ abstract final class AppTheme {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: AppColorTheme.dark.brand,
+        backgroundColor: AppColorTheme.dark.brandDeep,
         foregroundColor: AppColorTheme.dark.onBrand,
         disabledBackgroundColor: AppColorTheme.dark.surfaceAlt,
         disabledForegroundColor: AppColorTheme.dark.textFaint,
@@ -131,19 +132,19 @@ abstract final class AppTheme {
   static final ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    scaffoldBackgroundColor: const Color(0xFFF3F7F4),
-    primaryColor: AppColorTheme.light.brand,
+    scaffoldBackgroundColor: const Color(0xFFF5F6F8),
+    primaryColor: AppColorTheme.light.brandDeep,
     cardColor: AppColorTheme.light.surface,
     dividerColor: AppColorTheme.light.border,
     splashColor: AppColorTheme.light.brandDeep.withValues(alpha: 0.08),
     highlightColor: AppColorTheme.light.brandDeep.withValues(alpha: 0.05),
     colorScheme: ColorScheme.light(
       surface: AppColorTheme.light.surface,
-      onSurface: const Color(0xFF11241B),
+      onSurface: const Color(0xFF10141A),
       surfaceContainerHighest: AppColorTheme.light.surfaceAlt,
-      primary: AppColorTheme.light.brand,
+      primary: AppColorTheme.light.brandDeep,
       onPrimary: AppColorTheme.light.onBrand,
-      secondary: const Color(0xFF059669),
+      secondary: AppColorTheme.light.brandDeep,
       onSecondary: AppColorTheme.light.onBrand,
       error: AppColorTheme.light.danger,
       onError: Colors.white,
@@ -207,7 +208,7 @@ abstract final class AppTheme {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: AppColorTheme.light.brand,
+        backgroundColor: AppColorTheme.light.brandDeep,
         foregroundColor: AppColorTheme.light.onBrand,
         disabledBackgroundColor: AppColorTheme.light.surfaceAlt,
         disabledForegroundColor: AppColorTheme.light.textFaint,

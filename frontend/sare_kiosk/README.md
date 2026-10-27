@@ -11,7 +11,7 @@ The kiosk guides a shopper through the complete frictionless journey:
 
 | Capability | Details |
 |---|---|
-| **Weight-verification-first UI** | The entire visual language is built around the ±15g load-cell gate: emerald = verified / go, amber = attention, red = mismatch / stop. Color always pairs with an icon and a label — never color alone. |
+| **Weight-verification-first UI** | Royal blue is the brand (trust, checkout, primary actions) over quiet charcoal surfaces; color carries meaning around the ±15g load-cell gate: emerald = verified / go, amber = attention, red = mismatch / stop. Color always pairs with an icon and a label — never color alone. |
 | **Bi-directional & bilingual** | Full Arabic (RTL, Tajawal) and English (LTR, Poppins) with live toggle — layouts are direction-aware down to the countdown bar. |
 | **Offline-first edge engine** | When the .NET backend is unreachable, a local decision engine mirrors `CartService` rules (±15g tolerance, minor-unit pricing, seeded catalog) so demos never stall. |
 | **Power-flicker resilience** | The active session is persisted to disk; on boot the router restores the shopper straight into their open cart. |
@@ -21,7 +21,7 @@ The kiosk guides a shopper through the complete frictionless journey:
 
 ## 🎨 Design system — "Fresh-Verify"
 
-- **Dark showroom theme (default)**: deep green-charcoal surfaces (`#0C1310` family) with a single static emerald ambient glow anchoring every screen.
+- **Dark showroom theme (default)**: neutral charcoal surfaces (`#0E1116` family) with a quiet royal-blue ambient glow anchoring every screen; emerald is reserved for verification signals only.
 - **Light daytime theme**: porcelain surfaces with the same verification semantics.
 - **One voice of motion**: shared durations (`140/220/320ms`) and curves (`easeOutCubic` in, `easeInCubic` out); ambient animations are disabled automatically under `flutter test` and reduced-motion settings.
 - **Performance discipline**: `const`-first widgets, `RepaintBoundary` isolation around every animated/expensive region, rebuilds scoped to leaf consumers via `BlocBuilder`/`BlocSelector`.
