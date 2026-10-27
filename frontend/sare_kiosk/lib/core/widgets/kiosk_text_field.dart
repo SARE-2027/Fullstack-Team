@@ -4,9 +4,10 @@ import '../theme/app_colors.dart';
 import '../theme/app_typography.dart';
 
 /// Touchscreen-optimized text field for the 10.1" kiosk.
-/// Designed for manual barcode entry, membership lookup, and SKU search.
-/// Features high-contrast focus animation (`AnimatedContainer`), generous
-/// touch targets (56px default height), and Arabic baseline hardening.
+///
+/// Designed for manual barcode entry and membership lookup. Focus is answered
+/// with the brand border plus a soft outer glow so the active input is
+/// obvious from arm's length.
 class KioskTextField extends StatefulWidget {
   const KioskTextField({
     super.key,
@@ -91,25 +92,30 @@ class _KioskTextFieldState extends State<KioskTextField> {
     final colors = context.colors;
     final theme = Theme.of(context);
     final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-    final fontFamily = isArabic
-        ? AppTypography.arabicFontFamily
-        : AppTypography.englishFontFamily;
-
-    final resolvedBorderColor = _hasFocus
-        ? theme.colorScheme.primary
-        : colors.containerBorder;
+    final fontFamily =
+        isArabic ? AppTypography.arabicFontFamily : AppTypography.englishFontFamily;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOutCubic,
+      duration: AppTypography.base,
+      curve: AppTypography.enterCurve,
       height: widget.height,
       decoration: BoxDecoration(
-        color: colors.textFieldFill,
+        color: colors.surfaceAlt,
         borderRadius: BorderRadius.circular(widget.borderRadius),
         border: Border.all(
-          color: resolvedBorderColor,
+          color: _hasFocus ? theme.colorScheme.primary : colors.border,
           width: _hasFocus ? 1.8 : 1.2,
         ),
+        boxShadow: _hasFocus
+            ? [
+                BoxShadow(
+                  color: colors.brandGlow,
+                  blurRadius: 14,
+                  offset: const Offset(0, 3),
+                  spreadRadius: -3,
+                ),
+              ]
+            : null,
       ),
       child: Center(
         child: TextField(
@@ -134,8 +140,8 @@ class _KioskTextFieldState extends State<KioskTextField> {
             hintStyle: TextStyle(
               fontFamily: fontFamily,
               fontSize: 15,
-              fontWeight: FontWeight.normal,
-              color: colors.secondaryText,
+              fontWeight: FontWeight.w400,
+              color: colors.textFaint,
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -146,7 +152,8 @@ class _KioskTextFieldState extends State<KioskTextField> {
             focusedBorder: InputBorder.none,
             prefixIcon: widget.prefixIcon != null
                 ? Padding(
-                    padding: const EdgeInsetsDirectional.only(start: 12, end: 8),
+                    padding:
+                        const EdgeInsetsDirectional.only(start: 12, end: 8),
                     child: widget.prefixIcon,
                   )
                 : null,
@@ -157,7 +164,7 @@ class _KioskTextFieldState extends State<KioskTextField> {
             suffixIcon: widget.showClearButton && _hasText
                 ? IconButton(
                     icon: const Icon(Icons.close_rounded, size: 20),
-                    color: colors.secondaryText,
+                    color: colors.textSecondary,
                     onPressed: () {
                       _effectiveController.clear();
                       widget.onChanged?.call('');
