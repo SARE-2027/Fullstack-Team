@@ -1,4 +1,6 @@
 using System.Linq.Expressions;
+using Microsoft.Extensions.Options;
+using SARE.Application.Common;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SARE.Application.Common.DTOs;
@@ -9,7 +11,7 @@ using SARE.Domain.Catalog;
 
 namespace SARE.Infrastructure.Persistence.Repositories;
 
-public sealed class ProductRepository(AppDbContext context) : IProductRepository
+public sealed class ProductRepository(AppDbContext context, IOptions<CartMovementOptions> movementOptions) : IProductRepository
 {
     public async Task<PagedResponse<ProductResponse>> GetPageAsync(AdminProductQuery query, CancellationToken cancellationToken)
     {
@@ -149,7 +151,11 @@ public sealed class ProductRepository(AppDbContext context) : IProductRepository
         context.Categories.Where(category => category.Id == product.CategoryId).Select(category => category.NameAr).First(),
         context.Categories.Where(category => category.Id == product.CategoryId).Select(category => category.NameEn).First(),
         context.ProductVariants.Count(variant => variant.ProductId == product.Id),
-        context.ProductVariants.Count(variant => variant.ProductId == product.Id && variant.IsActive));
+        context.ProductVariants.Count(variant => variant.ProductId == product.Id && variant.IsActive))
+        {
+            WeightTolerancePercent = product.WeightTolerancePercent,
+            EffectiveWeightTolerancePercent = product.WeightTolerancePercent ?? movementOptions.Value.DefaultWeightTolerancePercent
+        };
 
     private Expression<Func<Product, ProductSummaryResponse>> PublicProjection() => product => new ProductSummaryResponse(
         product.Id, product.CategoryId, product.NameAr, product.NameEn, product.ImageUrl,

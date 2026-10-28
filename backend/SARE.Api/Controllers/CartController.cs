@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SARE.Api.Authorization;
 using SARE.Application.Common.Interfaces;
 using SARE.Application.DTOs.Cart;
 
@@ -6,7 +8,10 @@ namespace SARE.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class CartController(ICartService cartService, ISessionService sessionService) : ControllerBase
+public class CartController(
+    ICartService cartService,
+    ISessionService sessionService,
+    ICartMovementService movements) : ControllerBase
 {
     // PATCH: /api/carts/{cartId}
     [HttpPatch("/api/carts/{cartId}")]
@@ -22,6 +27,7 @@ public class CartController(ICartService cartService, ISessionService sessionSer
 
     // POST: api/cart/session/start
     [HttpPost("session/start")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
     public async Task<ActionResult<CartSummaryResponse>> StartSession(
         [FromBody] LegacyStartSessionRequest request,
         CancellationToken cancellationToken)
@@ -31,30 +37,27 @@ public class CartController(ICartService cartService, ISessionService sessionSer
         return Ok(session);
     }
 
-    // POST: api/cart/{sessionId}/items
-    [HttpPost("{sessionId:guid}/items")]
-    public async Task<ActionResult<CartItemProcessResult>> AddItem(
+    // HTTP and SignalR share one movement service and one result contract.
+    [HttpPost("{sessionId:guid}/movements")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public async Task<ActionResult<CartMovementResult>> ReportMovement(
         Guid sessionId,
-        [FromBody] CartAddItemRequest request,
-        CancellationToken cancellationToken)
+        [FromBody] CartMovementRequest request,
+        CancellationToken ct)
     {
-        var result = await cartService.ProcessItemDetectionAsync(sessionId, request, cancellationToken);
-
-        if (!result.Success && result.IsWeightMismatch)
-        {
-            return BadRequest(result);
-        }
-
-        if (!result.Success)
-        {
-            return NotFound(result);
-        }
-
-        return Ok(result);
+        return Ok(await movements.ReportAsync(sessionId, request, ct));
+    }
+    [HttpPost("{sessionId:guid}/exit-confirmation")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public async Task<ActionResult<CartMovementResult>> ConfirmExit(
+        Guid sessionId, [FromBody] ConfirmExitChoiceRequest request, CancellationToken ct)
+    {
+        return Ok(await movements.ConfirmExitAsync(sessionId, request, ct));
     }
 
     // POST: api/cart/{sessionId}/checkout
     [HttpPost("{sessionId:guid}/checkout")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
     public async Task<ActionResult<CheckoutResponseDto>> Checkout(
         Guid sessionId,
         CancellationToken cancellationToken)
@@ -74,6 +77,7 @@ public class CartController(ICartService cartService, ISessionService sessionSer
     // GET: /api/carts/{cartId}/session
     [HttpGet("active/{cartId}")]
     [HttpGet("/api/carts/{cartId}/session")]
+    [Authorize(Policy = AuthorizationPolicies.CatalogRead)]
     public async Task<ActionResult<CartSummaryResponse>> GetActiveSession(
         string cartId,
         CancellationToken cancellationToken)
@@ -84,6 +88,7 @@ public class CartController(ICartService cartService, ISessionService sessionSer
 
     // GET: api/cart/{sessionId}
     [HttpGet("{sessionId:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.CatalogRead)]
     public async Task<ActionResult<CartSummaryResponse>> GetSession(
         Guid sessionId,
         CancellationToken cancellationToken)

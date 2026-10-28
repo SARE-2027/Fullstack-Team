@@ -17,11 +17,19 @@ public sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
             table.HasCheckConstraint("ck_sessions_close_reason", "close_reason IS NULL OR close_reason IN ('staff_closed', 'abandoned')");
             table.HasCheckConstraint("ck_sessions_total_minor", "total_minor >= 0");
             table.HasCheckConstraint("ck_sessions_closed_at", "closed_at IS NULL OR closed_at >= started_at");
+            table.HasCheckConstraint("ck_sessions_movement_sequence", "last_movement_sequence >= 0");
+            table.HasCheckConstraint("ck_sessions_basket_weight", "basket_weight_g IS NULL OR basket_weight_g >= 0");
+            table.HasCheckConstraint("ck_sessions_pending_weight", "pending_weight_g >= 0 AND pending_weight_uncertainty_g BETWEEN 0 AND 1000000");
+            table.HasCheckConstraint("ck_sessions_basket_state", "basket_state IN ('verified','pending','needs_staff','auditing')");
         });
 
         builder.Property(session => session.CartId).HasMaxLength(32);
+        builder.Property(session => session.StaffRequestReason).HasMaxLength(200);
         builder.Property(session => session.StartedAt).HasDefaultValueSql("now()");
         builder.Property(session => session.LastActivityAt).HasDefaultValueSql("now()");
+        builder.Property(session => session.PendingWeightG).HasDefaultValue(0);
+        builder.Property(session => session.BasketState).HasConversion(new SnakeCaseEnumConverter<BasketState>())
+            .HasDefaultValue(BasketState.Verified);
 
         builder.Property(session => session.Status)
             .HasConversion(new SnakeCaseEnumConverter<SessionStatus>());

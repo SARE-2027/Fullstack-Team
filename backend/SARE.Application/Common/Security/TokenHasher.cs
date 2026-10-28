@@ -16,8 +16,15 @@ public static class TokenHasher
         if (string.IsNullOrWhiteSpace(rawToken) || string.IsNullOrWhiteSpace(storedHash))
             return false;
 
-        var computed = HashToken(rawToken);
-        return string.Equals(computed, storedHash, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(rawToken, storedHash, StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            var expected = Convert.FromHexString(storedHash);
+            var computed = SHA256.HashData(Encoding.UTF8.GetBytes(rawToken));
+            return CryptographicOperations.FixedTimeEquals(computed, expected);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }

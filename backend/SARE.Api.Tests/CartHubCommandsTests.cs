@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -11,6 +12,7 @@ using SARE.Application.DTOs.Cart;
 using SARE.Domain.Cart;
 using SARE.Domain.Catalog;
 using SARE.Domain.Enums;
+using SARE.Domain.Users;
 
 namespace SARE.Api.Tests;
 
@@ -26,6 +28,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
     {
         _client = _factory.CreateClient();
         _client.DefaultRequestHeaders.Add("X-Cart-Token", Token);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _factory.CreateToken(UserRoles.Admin));
         await _factory.InDatabaseAsync(async db =>
         {
             await db.Database.EnsureCreatedAsync();
@@ -70,7 +73,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
             await first.StartAsync();
             await JoinAsync(first);
             sessionId = (await StartAsync(first)).SessionId;
-            await DetectAsync(first, sessionId, Guid.NewGuid());
+            await ReportScanAsync(first, sessionId, Guid.NewGuid());
         }
 
         await _factory.InDatabaseAsync(async db =>
@@ -88,7 +91,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
         Assert.Equal("open", snapshot.Status);
         Assert.Equal(100, snapshot.TotalMinor);
         Assert.Equal(100, Assert.Single(snapshot.Items).UnitPriceMinor);
-        Assert.Equal(80, snapshot.Items[0].ExpectedWeightG);
+        Assert.Equal(50, snapshot.Items[0].ExpectedWeightG);
     }
 
     [Fact]
@@ -106,15 +109,15 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
         var session = await StartAsync(cart);
         Assert.Equal(session.SessionId, (await ReadAsync(cartUpdates)).SessionId);
         Assert.Equal(session.SessionId, (await ReadAsync(adminUpdates)).SessionId);
-        var detected = await DetectAsync(cart, session.SessionId, Guid.NewGuid());
-        Assert.True(detected.Success);
+        var detected = await ReportScanAsync(cart, session.SessionId, Guid.NewGuid());
+        Assert.Equal("Accepted", detected.Movement.Status);
         Assert.NotNull(detected.Session);
         var updated = await ReadAsync(cartUpdates);
         Assert.Equal(100, updated.TotalMinor);
         Assert.Equal(JsonSerializer.Serialize(updated), JsonSerializer.Serialize(detected.Session));
         Assert.Equal(JsonSerializer.Serialize(updated), JsonSerializer.Serialize(await ReadAsync(adminUpdates)));
         Assert.Equal(50, Assert.Single(updated.Items).ExpectedWeightG);
-        Assert.Equal(DetectionSource.Scanner, updated.Items[0].Source);
+        Assert.Equal(CartItemSource.Scanner, updated.Items[0].Source);
         Assert.Null(updated.Items[0].ImageUrl);
 
         var telemetry = await cart.InvokeAsync<CartTelemetryResponse>("UpdateCartTelemetry",
@@ -143,7 +146,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
             new CloseSessionRequest(Reason: CloseReason.StaffClosed));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("closed", (await ReadAsync(updates)).Status);
-        Assert.False((await DetectAsync(cart, session.SessionId, Guid.NewGuid())).Success);
+        await Assert.ThrowsAsync<HubException>(() => ReportScanAsync(cart, session.SessionId, Guid.NewGuid()));
         await AssertCountsAsync(0, 0, 0);
     }
 
@@ -157,7 +160,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
         await JoinAsync(first);
         Assert.Null(await JoinAsync(other, OtherCartId));
         var session = await StartAsync(first);
-        var scanError = await Assert.ThrowsAsync<HubException>(() => DetectAsync(other, session.SessionId, Guid.NewGuid()));
+        var scanError = await Assert.ThrowsAsync<HubException>(() => ReportScanAsync(other, session.SessionId, Guid.NewGuid()));
         Assert.Contains("SESSION_NOT_ACCESSIBLE", scanError.Message);
         var closeError = await Assert.ThrowsAsync<HubException>(() => other.InvokeAsync<CartSummaryResponse>("CloseSession", session.SessionId));
         Assert.Contains("SESSION_NOT_ACCESSIBLE", closeError.Message);
@@ -167,7 +170,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
 
     [Theory]
     [InlineData("StartSession")]
-    [InlineData("ProcessItemDetection")]
+    [InlineData("ReportCartMovement")]
     [InlineData("UpdateCartTelemetry")]
     [InlineData("CloseSession")]
     public async Task CommandsRequireAnAuthenticatedCartSubscription(string method)
@@ -179,7 +182,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
             switch (method)
             {
                 case "StartSession": await StartAsync(hub); break;
-                case "ProcessItemDetection": await DetectAsync(hub, Guid.NewGuid(), Guid.NewGuid()); break;
+                case "ReportCartMovement": await ReportScanAsync(hub, Guid.NewGuid(), Guid.NewGuid()); break;
                 case "UpdateCartTelemetry": await hub.InvokeAsync(method, new UpdateCartTelemetryRequest(80, null)); break;
                 case "CloseSession": await hub.InvokeAsync(method, Guid.NewGuid()); break;
             }
@@ -222,7 +225,7 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AcceptedDetectionRetryDoesNotDuplicateItemsTotalsOrNotificationsEvenAfterClose()
+    public async Task AcceptedMovementRetryDoesNotDuplicateItemsTotalsOrNotificationsEvenAfterClose()
     {
         await using var hub = CreateHub();
         var updates = Listen(hub);
@@ -231,47 +234,20 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
         var session = await StartAsync(hub);
         await ReadAsync(updates);
         var eventId = Guid.NewGuid();
-        Assert.True((await DetectAsync(hub, session.SessionId, eventId)).Success);
+        Assert.Equal("Accepted", (await ReportScanAsync(hub, session.SessionId, eventId)).Movement.Status);
         await ReadAsync(updates);
-        Assert.True((await DetectAsync(hub, session.SessionId, eventId)).Success);
+        Assert.Equal("Accepted", (await ReportScanAsync(hub, session.SessionId, eventId)).Movement.Status);
         Assert.False(updates.Reader.TryRead(out _));
         await hub.InvokeAsync("CloseSession", session.SessionId);
         await ReadAsync(updates);
-        var closedReplay = await DetectAsync(hub, session.SessionId, eventId);
-        Assert.True(closedReplay.Success);
+        var closedReplay = await ReportScanAsync(hub, session.SessionId, eventId);
+        Assert.Equal("Accepted", closedReplay.Movement.Status);
         Assert.NotNull(closedReplay.Session);
         Assert.Equal("closed", closedReplay.Session.Status);
         Assert.NotNull(closedReplay.Session.ClosedAt);
         Assert.Equal(100, Assert.Single(closedReplay.Session.Items).UnitPriceMinor);
         Assert.False(updates.Reader.TryRead(out _));
         await AssertCountsAsync(1, 1, 100);
-    }
-
-    [Fact]
-    public async Task RejectedRetryKeepsOriginalOutcomeEvenIfProductWeightChanges()
-    {
-        await using var hub = CreateHub();
-        var alerts = Channel.CreateUnbounded<string>();
-        hub.On<System.Text.Json.JsonElement>("WeightMismatchWarning", payload => alerts.Writer.TryWrite(payload.ToString()));
-        await hub.StartAsync();
-        await JoinAsync(hub);
-        var session = await StartAsync(hub);
-        var eventId = Guid.NewGuid();
-        var first = await DetectAsync(hub, session.SessionId, eventId, weight: 500);
-        Assert.True(first.IsWeightMismatch);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await alerts.Reader.ReadAsync(timeout.Token);
-        await _factory.InDatabaseAsync(async db =>
-        {
-            (await db.ProductVariants.SingleAsync()).WeightG = 500;
-            await db.SaveChangesAsync();
-        });
-        var retry = await DetectAsync(hub, session.SessionId, eventId, weight: 500);
-        Assert.False(retry.Success);
-        Assert.True(retry.IsWeightMismatch);
-        Assert.Null(retry.ExpectedWeightG);
-        Assert.False(alerts.Reader.TryRead(out _));
-        await AssertCountsAsync(0, 1, 0);
     }
 
     [Fact]
@@ -282,51 +258,17 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
         await JoinAsync(hub);
         var first = await StartAsync(hub);
         var eventId = Guid.NewGuid();
-        await DetectAsync(hub, first.SessionId, eventId);
-        var changed = await Assert.ThrowsAsync<HubException>(() => DetectAsync(hub, first.SessionId, eventId, weight: 51));
+        await ReportScanAsync(hub, first.SessionId, eventId);
+        var changed = await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync<CartMovementResult>(
+            "ReportCartMovement", first.SessionId, GetScanRequest(first.SessionId, eventId) with { Items = [new(CartItemAction.Scan, "DIFFERENT-BARCODE", CartItemSource.Scanner)] }));
         Assert.Contains("EVENT_ID_REUSED", changed.Message);
         await hub.InvokeAsync("CloseSession", first.SessionId);
         var second = await StartAsync(hub);
-        var reused = await Assert.ThrowsAsync<HubException>(() => DetectAsync(hub, second.SessionId, eventId));
+        var reused = await Assert.ThrowsAsync<HubException>(() => ReportScanAsync(hub, second.SessionId, eventId));
         Assert.Contains("EVENT_ID_REUSED", reused.Message);
-        Assert.True((await DetectAsync(hub, first.SessionId, eventId)).Success);
+        Assert.Equal("Accepted", (await ReportScanAsync(hub, first.SessionId, eventId)).Movement.Status);
         Assert.Empty((await JoinAsync(hub))!.Items);
         await AssertCountsAsync(1, 1, 100);
-    }
-
-    [Theory]
-    [InlineData(null, 50, null)]
-    [InlineData("SOCKET-ITEM", -1, "valid")]
-    [InlineData("", 50, "valid")]
-    [InlineData("SOCKET-ITEM", 50, null)]
-    [InlineData("SOCKET-ITEM", 50, "empty")]
-    public async Task InvalidDetectionsAreRejectedBeforeWriting(string? barcode, int weight, string? eventKind)
-    {
-        await using var hub = CreateHub();
-        await hub.StartAsync();
-        await JoinAsync(hub);
-        var session = await StartAsync(hub);
-        Guid? eventId = eventKind == "valid" ? Guid.NewGuid() : eventKind == "empty" ? Guid.Empty : null;
-        var error = await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync<CartItemProcessResult>(
-            "ProcessItemDetection", session.SessionId, new CartAddItemRequest(barcode!, weight, EventId: eventId)));
-        Assert.Contains("VALIDATION_FAILED", error.Message);
-        await AssertCountsAsync(0, 0, 0);
-    }
-
-    [Theory]
-    [InlineData(50, true, 1, 100)]
-    [InlineData(500, false, 0, 0)]
-    public async Task ConcurrentRetryRollsBackLosingWritesAndAcknowledgesWinningEvent(int weight, bool success, int itemCount, int total)
-    {
-        await using var hub = CreateHub();
-        await hub.StartAsync();
-        await JoinAsync(hub);
-        var session = await StartAsync(hub);
-        _factory.SimulateDetectionRace = true;
-        var result = await DetectAsync(hub, session.SessionId, Guid.NewGuid(), weight);
-        Assert.Equal(success, result.Success);
-        Assert.Contains("already", result.Message);
-        await AssertCountsAsync(itemCount, 1, total);
     }
 
     [Fact]
@@ -381,10 +323,24 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
     private static Task<CartSummaryResponse> StartAsync(HubConnection hub)
         => hub.InvokeAsync<CartSummaryResponse>("StartSession", new CartStartSessionRequest());
 
-    private static Task<CartItemProcessResult> DetectAsync(HubConnection hub, Guid sessionId, Guid eventId, int weight = 50)
-        => hub.InvokeAsync<CartItemProcessResult>("ProcessItemDetection", sessionId,
-            new CartAddItemRequest("SOCKET-ITEM", weight, EventId: eventId));
+    private readonly Dictionary<(Guid, Guid), CartMovementRequest> _reports = new();
+    private readonly Dictionary<Guid, int> _sequences = new();
+    private readonly Guid _boot = Guid.NewGuid();
 
+    private CartMovementRequest GetScanRequest(Guid sessionId, Guid eventId)
+    {
+        if (_reports.TryGetValue((sessionId, eventId), out var saved)) return saved;
+        var now = DateTime.UtcNow;
+        var sequence = _sequences.GetValueOrDefault(sessionId) + 1;
+        _sequences[sessionId] = sequence;
+        var request = new CartMovementRequest(eventId, Guid.NewGuid(), sequence, _boot, now, now,
+            [new(CartItemAction.Scan, "SOCKET-ITEM", CartItemSource.Scanner)]);
+        _reports[(sessionId, eventId)] = request;
+        return request;
+    }
+
+    private Task<CartMovementResult> ReportScanAsync(HubConnection hub, Guid sessionId, Guid eventId) =>
+        hub.InvokeAsync<CartMovementResult>("ReportCartMovement", sessionId, GetScanRequest(sessionId, eventId));
     private static Channel<CartSummaryResponse> Listen(HubConnection hub)
     {
         var channel = Channel.CreateUnbounded<CartSummaryResponse>();
@@ -398,10 +354,10 @@ public sealed class CartHubCommandsTests : IAsyncLifetime
         return await channel.Reader.ReadAsync(timeout.Token);
     }
 
-    private Task AssertCountsAsync(int items, int detections, int total) => _factory.InDatabaseAsync(async db =>
+    private Task AssertCountsAsync(int items, int observations, int total) => _factory.InDatabaseAsync(async db =>
     {
         Assert.Equal(items, await db.SessionItems.CountAsync());
-        Assert.Equal(detections, await db.DetectionEvents.CountAsync());
+        Assert.Equal(observations, await db.CartMovementItems.CountAsync());
         Assert.Equal(total, await db.Sessions.SumAsync(session => session.TotalMinor));
     });
 }

@@ -48,7 +48,8 @@ public sealed class ProductService(
         {
             Id = Guid.NewGuid(), CategoryId = request.CategoryId,
             NameAr = request.NameAr!, NameEn = request.NameEn!,
-            ImageUrl = request.ImageUrl, IsActive = request.IsActive
+            ImageUrl = request.ImageUrl, IsActive = request.IsActive,
+            WeightTolerancePercent = request.WeightTolerancePercent
         };
         repository.Add(product);
         await repository.SaveChangesAsync(cancellationToken);
@@ -67,6 +68,7 @@ public sealed class ProductService(
         product.NameEn = request.NameEn!;
         product.ImageUrl = request.ImageUrl;
         product.IsActive = request.IsActive;
+        product.WeightTolerancePercent = request.WeightTolerancePercent;
         await repository.SaveChangesAsync(cancellationToken);
         if (previousImage != product.ImageUrl) await imageStore.DeleteAsync(previousImage, CancellationToken.None);
         return await GetSummaryAsync(id, cancellationToken);

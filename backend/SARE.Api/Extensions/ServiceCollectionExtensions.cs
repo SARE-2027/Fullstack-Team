@@ -17,12 +17,13 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
-        services.AddScoped<ICartNotificationService, CartNotificationService>();
+        services.AddScoped<ICartNotificationService, CartNotificationService>(); services.AddSingleton<CartRegistrationGate>();
+        services.AddSingleton<CartRegistrationGate>();
 
         services.AddControllers();
         services.AddProblemDetails();
         services.AddExceptionHandler<GlobalExceptionHandler>();
-        services.AddSignalR();
+        services.AddSignalR().AddHubOptions<SARE.Api.Hubs.CartHub>(options => options.MaximumReceiveMessageSize = 256 * 1024);
 
         services.AddCors(options =>
         {

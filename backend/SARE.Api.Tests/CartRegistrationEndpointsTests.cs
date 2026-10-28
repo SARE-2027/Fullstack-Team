@@ -152,6 +152,7 @@ public sealed class CartRegistrationEndpointsTests : IAsyncLifetime
     {
         CartRegistrationResponse registered;
         Guid sessionId;
+        await OpenRegistrationAsync();
         await using (var hub = CreateHub())
         {
             await hub.StartAsync();
@@ -193,6 +194,7 @@ public sealed class CartRegistrationEndpointsTests : IAsyncLifetime
     [Fact]
     public async Task InvalidHubRegistrationDoesNotSaveAnythingAndAValidRetryCanSucceed()
     {
+        await OpenRegistrationAsync();
         await using var hub = CreateHub();
         await hub.StartAsync();
         var invalidVersion = await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync<CartRegistrationResponse>(
@@ -209,9 +211,67 @@ public sealed class CartRegistrationEndpointsTests : IAsyncLifetime
             "JoinCartGroup", registered.CartId, registered.HardwareToken));
     }
 
-    private HubConnection CreateHub() => new HubConnectionBuilder().WithUrl("http://localhost/hubs/cart", options =>
+    [Fact]
+    public async Task HubRegistrationIsClosedByDefaultAndFollowsTheAdminToggle()
+    {
+        await using var device = CreateHub();
+        await device.StartAsync();
+        await using var admin = CreateHub("Admin");
+        await admin.StartAsync();
+
+        Assert.False(await admin.InvokeAsync<bool>("GetCartRegistrationOpen"));
+        var closed = await Assert.ThrowsAsync<HubException>(() =>
+            device.InvokeAsync<CartRegistrationResponse>("RegisterCart", new CreateCartRequest()));
+        Assert.Contains("REGISTRATION_CLOSED", closed.Message);
+        await _factory.InDatabaseAsync(async db => Assert.Empty(await db.Carts.ToListAsync()));
+
+        Assert.True(await admin.InvokeAsync<bool>("SetCartRegistrationOpen", true));
+        Assert.True(await admin.InvokeAsync<bool>("GetCartRegistrationOpen"));
+        // The flag is shared server state, so an already connected device sees it immediately.
+        var registered = await device.InvokeAsync<CartRegistrationResponse>("RegisterCart", new CreateCartRequest());
+        Assert.Equal("active", registered.Status);
+
+        Assert.False(await admin.InvokeAsync<bool>("SetCartRegistrationOpen", false));
+        await using var another = CreateHub();
+        await another.StartAsync();
+        var closedAgain = await Assert.ThrowsAsync<HubException>(() =>
+            another.InvokeAsync<CartRegistrationResponse>("RegisterCart", new CreateCartRequest()));
+        Assert.Contains("REGISTRATION_CLOSED", closedAgain.Message);
+
+        // Closing affects new registrations only; an already provisioned cart can still join.
+        Assert.Null(await another.InvokeAsync<CartSummaryResponse?>(
+            "JoinCartGroup", registered.CartId, registered.HardwareToken));
+        await _factory.InDatabaseAsync(async db => Assert.Equal(1, await db.Carts.CountAsync()));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Customer")]
+    [InlineData("Staff")]
+    public async Task OnlyAdminsCanToggleOrReadHubRegistration(string? role)
+    {
+        await using var hub = CreateHub(role);
+        await hub.StartAsync();
+
+        await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync<bool>("SetCartRegistrationOpen", true));
+        await Assert.ThrowsAsync<HubException>(() => hub.InvokeAsync<bool>("GetCartRegistrationOpen"));
+
+        await using var admin = CreateHub("Admin");
+        await admin.StartAsync();
+        Assert.False(await admin.InvokeAsync<bool>("GetCartRegistrationOpen"));
+    }
+
+    private async Task OpenRegistrationAsync()
+    {
+        await using var admin = CreateHub("Admin");
+        await admin.StartAsync();
+        Assert.True(await admin.InvokeAsync<bool>("SetCartRegistrationOpen", true));
+    }
+
+    private HubConnection CreateHub(string? role = null) => new HubConnectionBuilder().WithUrl("http://localhost/hubs/cart", options =>
     {
         options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler();
         options.Transports = HttpTransportType.LongPolling;
+        if (role is not null) options.AccessTokenProvider = () => Task.FromResult<string?>(_factory.CreateToken(role));
     }).Build();
 }

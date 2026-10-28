@@ -32,7 +32,7 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
     public bool SimulateCatalogWriteRace { get; set; }
     public bool SimulateSessionWriteRace { get; set; }
     public bool SimulateSessionStartRace { get; set; }
-    public bool SimulateDetectionRace { get; set; }
+    public bool SimulateMovementRace { get; set; }
     public bool UseApplicationJwt { get; init; }
     public string ImageRoot { get; } = Path.Combine(Path.GetTempPath(), "sare-image-tests", Guid.NewGuid().ToString("N"));
 
@@ -74,12 +74,12 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         });
     }
 
-    public string CreateToken(string role = "admin", bool expired = false, bool invalidSignature = false)
+    public string CreateToken(string role = "admin", bool expired = false, bool invalidSignature = false, string? subject = null)
     {
         role = UserRoles.All.FirstOrDefault(name => string.Equals(name, role, StringComparison.OrdinalIgnoreCase)) ?? role;
         var now = DateTime.UtcNow;
         var token = new JwtSecurityToken(Issuer, Audience,
-            [new Claim(JwtRegisteredClaimNames.Sub, Guid.NewGuid().ToString()), new Claim("role", role)],
+            [new Claim(JwtRegisteredClaimNames.Sub, subject ?? Guid.NewGuid().ToString()), new Claim("role", role)],
             notBefore: now.AddHours(-1), expires: expired ? now.AddMinutes(-1) : now.AddMinutes(10),
             signingCredentials: new SigningCredentials(
                 invalidSignature ? new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32)) : _signingKey,
@@ -105,6 +105,25 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
         public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
+            var receipt = eventData.Context!.ChangeTracker.Entries<SARE.Domain.Cart.CartEventReceipt>()
+                .FirstOrDefault(entry => entry.State == EntityState.Added)?.Entity;
+            if (factory.SimulateMovementRace && receipt is not null)
+            {
+                factory.SimulateMovementRace = false;
+                var movement = eventData.Context.ChangeTracker.Entries<SARE.Domain.Cart.CartMovement>()
+                    .Single(entry => entry.Entity.Id == receipt.MovementId).Entity;
+                var request = new SARE.Application.DTOs.Cart.CartMovementRequest(receipt.Id, movement.Id,
+                    receipt.Sequence, receipt.DeviceBootId, movement.StartedAtUtc, movement.EndedAtUtc,
+                    movement.Items.OrderBy(item => item.Position).Select(item => new SARE.Application.DTOs.Cart.CartMovementItemRequest(
+                        item.Action, item.DetectedBarcode, item.Source, item.Confidence, item.TargetSessionItemId,
+                        item.TrackId, item.CameraId)).ToArray(),
+                    movement.HasBasketChange ? new SARE.Application.DTOs.Cart.BasketWeightDto(movement.WeightBeforeG!.Value,
+                        movement.WeightAfterG!.Value, true) : null,
+                    true, movement.ModelVersion);
+                await using var winningScope = factory.Services.CreateAsyncScope();
+                await winningScope.ServiceProvider.GetRequiredService<ICartMovementService>()
+                    .ReportAsync(receipt.SessionId, request, cancellationToken);
+            }
             var newSession = eventData.Context!.ChangeTracker.Entries<SARE.Domain.Cart.Session>()
                 .FirstOrDefault(entry => entry.State == EntityState.Added);
             if (factory.SimulateSessionStartRace && newSession is not null)
@@ -117,39 +136,6 @@ public sealed class CatalogApiFactory : WebApplicationFactory<Program>
                     {
                         Id = Guid.NewGuid(), CartId = newSession.Entity.CartId,
                         StartedAt = DateTime.UtcNow, LastActivityAt = DateTime.UtcNow
-                    });
-                    await db.SaveChangesAsync(cancellationToken);
-                });
-            }
-
-            var newDetection = eventData.Context.ChangeTracker.Entries<SARE.Domain.Cart.DetectionEvent>()
-                .FirstOrDefault(entry => entry.State == EntityState.Added);
-            if (factory.SimulateDetectionRace && newDetection is not null)
-            {
-                factory.SimulateDetectionRace = false;
-                // A retry wins with the same event ID while this invocation still holds stale state.
-                await factory.InDatabaseAsync(async db =>
-                {
-                    var detection = newDetection.Entity;
-                    var item = eventData.Context.ChangeTracker.Entries<SARE.Domain.Cart.SessionItem>()
-                        .SingleOrDefault(entry => entry.State == EntityState.Added)?.Entity;
-                    if (item is not null)
-                    {
-                        db.SessionItems.Add(new SARE.Domain.Cart.SessionItem
-                        {
-                            Id = item.Id, SessionId = item.SessionId, VariantId = item.VariantId,
-                            UnitPriceMinor = item.UnitPriceMinor, Source = item.Source, AddedAt = item.AddedAt
-                        });
-                        var session = await db.Sessions.SingleAsync(row => row.Id == item.SessionId, cancellationToken);
-                        session.TotalMinor += item.UnitPriceMinor;
-                        session.LastActivityAt = DateTime.UtcNow.AddTicks(1);
-                    }
-                    db.DetectionEvents.Add(new SARE.Domain.Cart.DetectionEvent
-                    {
-                        Id = detection.Id, SessionId = detection.SessionId, SessionItemId = detection.SessionItemId,
-                        Source = detection.Source, DetectedBarcode = detection.DetectedBarcode,
-                        WeightDeltaG = detection.WeightDeltaG, Outcome = detection.Outcome,
-                        FinalBarcode = detection.FinalBarcode, CreatedAt = detection.CreatedAt
                     });
                     await db.SaveChangesAsync(cancellationToken);
                 });

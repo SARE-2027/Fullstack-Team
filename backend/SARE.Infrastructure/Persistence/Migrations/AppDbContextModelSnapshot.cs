@@ -200,11 +200,316 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SARE.Domain.Cart.DetectionEvent", b =>
+            modelBuilder.Entity("SARE.Domain.Cart.CartBasketAudit", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid?>("CompletedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by_user_id");
+
+                    b.Property<int>("LastScanSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_scan_sequence");
+
+                    b.Property<int?>("LastStableWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_stable_weight_g");
+
+                    b.Property<DateTime?>("LastWeightAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_weight_at_utc");
+
+                    b.Property<int?>("LastWeightSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_weight_sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<Guid>("StartedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("started_by_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cart_basket_audits");
+
+                    b.HasIndex("SessionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cart_basket_audits_session_id")
+                        .HasFilter("completed_at_utc IS NULL");
+
+                    b.ToTable("cart_basket_audits", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cart_basket_audits_completed", "(completed_at_utc IS NULL AND completed_by_user_id IS NULL) OR (completed_at_utc IS NOT NULL AND completed_at_utc >= started_at_utc AND completed_by_user_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_cart_basket_audits_weight", "last_stable_weight_g IS NULL OR last_stable_weight_g BETWEEN 0 AND 1000000");
+                        });
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartBasketAuditItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AuditId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("audit_id");
+
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("barcode");
+
+                    b.Property<int>("ExpectedWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("expected_weight_g");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_removed");
+
+                    b.Property<Guid?>("OriginalSessionItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_session_item_id");
+
+                    b.Property<DateTime>("ScannedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scanned_at_utc");
+
+                    b.Property<int>("UnitPriceMinor")
+                        .HasColumnType("integer")
+                        .HasColumnName("unit_price_minor");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<decimal>("WeightTolerancePercent")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("weight_tolerance_percent");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cart_basket_audit_items");
+
+                    b.HasIndex("AuditId")
+                        .HasDatabaseName("ix_cart_basket_audit_items_audit_id");
+
+                    b.HasIndex("OriginalSessionItemId")
+                        .HasDatabaseName("ix_cart_basket_audit_items_original_session_item_id");
+
+                    b.HasIndex("VariantId")
+                        .HasDatabaseName("ix_cart_basket_audit_items_variant_id");
+
+                    b.ToTable("cart_basket_audit_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cart_basket_audit_items_price", "unit_price_minor >= 0");
+
+                            t.HasCheckConstraint("ck_cart_basket_audit_items_weight", "expected_weight_g > 0");
+
+                            t.HasCheckConstraint("ck_cart_basket_audit_items_weight_tolerance_percent", "weight_tolerance_percent BETWEEN 0 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartEventReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("DeviceBootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_boot_id");
+
+                    b.Property<Guid>("MovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("movement_id");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_hash");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at_utc");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cart_event_receipts");
+
+                    b.HasIndex("MovementId")
+                        .HasDatabaseName("ix_cart_event_receipts_movement_id");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cart_event_receipts_session_id_sequence");
+
+                    b.ToTable("cart_event_receipts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cart_event_receipts_sequence", "sequence > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartMovement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AuditId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("audit_id");
+
+                    b.Property<bool>("ConfirmedByCustomer")
+                        .HasColumnType("boolean")
+                        .HasColumnName("confirmed_by_customer");
+
+                    b.Property<Guid>("DeviceBootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_boot_id");
+
+                    b.Property<DateTime>("EndedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at_utc");
+
+                    b.Property<int>("ExitPendingUncertaintyG")
+                        .HasColumnType("integer")
+                        .HasColumnName("exit_pending_uncertainty_g");
+
+                    b.Property<int>("ExitPendingWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("exit_pending_weight_g");
+
+                    b.Property<int>("ExitWeightUncertaintyG")
+                        .HasColumnType("integer")
+                        .HasColumnName("exit_weight_uncertainty_g");
+
+                    b.Property<bool>("HasBasketChange")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_basket_change");
+
+                    b.Property<string>("ModelVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("model_version");
+
+                    b.Property<int>("PendingWeightAfterG")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("pending_weight_after_g");
+
+                    b.Property<int>("PendingWeightBeforeG")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("pending_weight_before_g");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("reason_code");
+
+                    b.Property<Guid?>("RelatedMovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("related_movement_id");
+
+                    b.Property<Guid?>("ResolvedByMovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_movement_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<int?>("UnconfirmedExitWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("unconfirmed_exit_weight_g");
+
+                    b.Property<int?>("WeightAfterG")
+                        .HasColumnType("integer")
+                        .HasColumnName("weight_after_g");
+
+                    b.Property<int?>("WeightBeforeG")
+                        .HasColumnType("integer")
+                        .HasColumnName("weight_before_g");
+
+                    b.HasKey("Id")
+                        .HasName("pk_cart_movements");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cart_movements_session_id_sequence");
+
+                    b.ToTable("cart_movements", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_cart_movements_exit_pending", "exit_pending_weight_g >= 0 AND exit_pending_uncertainty_g BETWEEN 0 AND 1000000");
+
+                            t.HasCheckConstraint("ck_cart_movements_exit_uncertainty", "exit_weight_uncertainty_g >= 0");
+
+                            t.HasCheckConstraint("ck_cart_movements_pending_weight", "pending_weight_before_g >= 0 AND pending_weight_after_g >= 0 AND (unconfirmed_exit_weight_g IS NULL OR unconfirmed_exit_weight_g >= 0)");
+
+                            t.HasCheckConstraint("ck_cart_movements_sequence", "sequence > 0");
+
+                            t.HasCheckConstraint("ck_cart_movements_status", "status IN ('accepted','needs_confirmation','cancelled')");
+
+                            t.HasCheckConstraint("ck_cart_movements_time", "ended_at_utc >= started_at_utc");
+
+                            t.HasCheckConstraint("ck_cart_movements_weights", "(weight_before_g IS NULL AND weight_after_g IS NULL) OR (weight_before_g IS NOT NULL AND weight_after_g IS NOT NULL AND weight_before_g >= 0 AND weight_after_g >= 0)");
+                        });
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartMovementItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasDefaultValue("enter")
+                        .HasColumnName("action");
+
+                    b.Property<string>("CameraId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("camera_id");
 
                     b.Property<float?>("Confidence")
                         .HasColumnType("real")
@@ -221,24 +526,34 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("detected_barcode");
 
-                    b.Property<string>("FinalBarcode")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("final_barcode");
+                    b.Property<string>("Effect")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("none")
+                        .HasColumnName("effect");
 
-                    b.Property<string>("ModelVersion")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("model_version");
+                    b.Property<int?>("ExpectedWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("expected_weight_g");
+
+                    b.Property<Guid>("MovementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("movement_id");
 
                     b.Property<string>("Outcome")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("outcome");
 
-                    b.Property<Guid>("SessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("session_id");
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("reason_code");
 
                     b.Property<Guid?>("SessionItemId")
                         .HasColumnType("uuid")
@@ -249,26 +564,57 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("source");
 
-                    b.Property<int>("WeightDeltaG")
+                    b.Property<Guid?>("TargetSessionItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_session_item_id");
+
+                    b.Property<string>("TrackId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("track_id");
+
+                    b.Property<int?>("UnitPriceMinor")
                         .HasColumnType("integer")
-                        .HasColumnName("weight_delta_g");
+                        .HasColumnName("unit_price_minor");
+
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<decimal>("WeightTolerancePercent")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("weight_tolerance_percent");
 
                     b.HasKey("Id")
-                        .HasName("pk_detection_events");
+                        .HasName("pk_cart_movement_items");
 
                     b.HasIndex("SessionItemId")
-                        .HasDatabaseName("ix_detection_events_session_item_id");
+                        .HasDatabaseName("ix_cart_movement_items_session_item_id");
 
-                    b.HasIndex("SessionId", "CreatedAt")
-                        .HasDatabaseName("ix_detection_events_session_id_created_at");
+                    b.HasIndex("VariantId")
+                        .HasDatabaseName("ix_cart_movement_items_variant_id");
 
-                    b.ToTable("detection_events", null, t =>
+                    b.HasIndex("MovementId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ix_cart_movement_items_movement_id_position");
+
+                    b.ToTable("cart_movement_items", null, t =>
                         {
-                            t.HasCheckConstraint("ck_detection_events_confidence", "confidence IS NULL OR confidence BETWEEN 0 AND 1");
+                            t.HasCheckConstraint("ck_cart_movement_items_action", "action IN ('scan','enter','exit','cancel_scan')");
 
-                            t.HasCheckConstraint("ck_detection_events_outcome", "outcome IN ('accepted', 'corrected', 'rejected', 'unknown')");
+                            t.HasCheckConstraint("ck_cart_movement_items_confidence", "confidence IS NULL OR confidence BETWEEN 0 AND 1");
 
-                            t.HasCheckConstraint("ck_detection_events_source", "source IN ('vision', 'scanner', 'manual')");
+                            t.HasCheckConstraint("ck_cart_movement_items_effect", "effect IN ('none','added','removed','placement_confirmed','no_change','pending_added','pending_removed')");
+
+                            t.HasCheckConstraint("ck_cart_movement_items_outcome", "outcome IN ('accepted', 'corrected', 'rejected', 'unknown')");
+
+                            t.HasCheckConstraint("ck_cart_movement_items_position", "position >= 0");
+
+                            t.HasCheckConstraint("ck_cart_movement_items_snapshot", "(expected_weight_g IS NULL OR expected_weight_g > 0) AND (unit_price_minor IS NULL OR unit_price_minor >= 0)");
+
+                            t.HasCheckConstraint("ck_cart_movement_items_source", "source IN ('vision', 'scanner', 'manual')");
+
+                            t.HasCheckConstraint("ck_cart_movement_items_weight_tolerance_percent", "weight_tolerance_percent BETWEEN 0 AND 100");
                         });
                 });
 
@@ -278,6 +624,17 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("BasketState")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("verified")
+                        .HasColumnName("basket_state");
+
+                    b.Property<int?>("BasketWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("basket_weight_g");
 
                     b.Property<string>("CartId")
                         .IsRequired()
@@ -302,6 +659,33 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_activity_at")
                         .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("LastAuditCompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_audit_completed_at_utc");
+
+                    b.Property<int>("LastMovementSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_movement_sequence");
+
+                    b.Property<int>("PendingWeightG")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("pending_weight_g");
+
+                    b.Property<int>("PendingWeightUncertaintyG")
+                        .HasColumnType("integer")
+                        .HasColumnName("pending_weight_uncertainty_g");
+
+                    b.Property<string>("StaffRequestReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("staff_request_reason");
+
+                    b.Property<DateTime?>("StaffRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("staff_requested_at");
 
                     b.Property<DateTime>("StartedAt")
                         .ValueGeneratedOnAdd()
@@ -350,9 +734,17 @@ namespace SARE.Infrastructure.Persistence.Migrations
 
                     b.ToTable("sessions", null, t =>
                         {
+                            t.HasCheckConstraint("ck_sessions_basket_state", "basket_state IN ('verified','pending','needs_staff','auditing')");
+
+                            t.HasCheckConstraint("ck_sessions_basket_weight", "basket_weight_g IS NULL OR basket_weight_g >= 0");
+
                             t.HasCheckConstraint("ck_sessions_close_reason", "close_reason IS NULL OR close_reason IN ('staff_closed', 'abandoned')");
 
                             t.HasCheckConstraint("ck_sessions_closed_at", "closed_at IS NULL OR closed_at >= started_at");
+
+                            t.HasCheckConstraint("ck_sessions_movement_sequence", "last_movement_sequence >= 0");
+
+                            t.HasCheckConstraint("ck_sessions_pending_weight", "pending_weight_g >= 0 AND pending_weight_uncertainty_g BETWEEN 0 AND 1000000");
 
                             t.HasCheckConstraint("ck_sessions_status", "status IN ('open', 'closed', 'abandoned')");
 
@@ -372,7 +764,47 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnName("added_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("barcode");
+
+                    b.Property<string>("BasketCameraId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("basket_camera_id");
+
+                    b.Property<Guid?>("BasketDeviceBootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("basket_device_boot_id");
+
+                    b.Property<string>("BasketPresence")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("unconfirmed")
+                        .HasColumnName("basket_presence");
+
+                    b.Property<string>("BasketTrackId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("basket_track_id");
+
+                    b.Property<int?>("ExpectedWeightG")
+                        .HasColumnType("integer")
+                        .HasColumnName("expected_weight_g");
+
+                    b.Property<int>("PlacementSequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("placement_sequence");
+
+                    b.Property<DateTime?>("RemovalRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removal_requested_at");
+
                     b.Property<DateTime?>("RemovedAt")
+                        .IsConcurrencyToken()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("removed_at");
 
@@ -393,6 +825,10 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("variant_id");
 
+                    b.Property<decimal>("WeightTolerancePercent")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("weight_tolerance_percent");
+
                     b.HasKey("Id")
                         .HasName("pk_session_items");
 
@@ -404,11 +840,19 @@ namespace SARE.Infrastructure.Persistence.Migrations
 
                     b.ToTable("session_items", null, t =>
                         {
+                            t.HasCheckConstraint("ck_session_items_placement_sequence", "placement_sequence >= 0");
+
+                            t.HasCheckConstraint("ck_session_items_presence", "basket_presence IN ('unconfirmed','inside','outside')");
+
                             t.HasCheckConstraint("ck_session_items_removed_at", "removed_at IS NULL OR removed_at >= added_at");
 
                             t.HasCheckConstraint("ck_session_items_source", "source IN ('vision', 'scanner', 'manual')");
 
                             t.HasCheckConstraint("ck_session_items_unit_price_minor", "unit_price_minor >= 0");
+
+                            t.HasCheckConstraint("ck_session_items_weight", "expected_weight_g IS NULL OR expected_weight_g > 0");
+
+                            t.HasCheckConstraint("ck_session_items_weight_tolerance_percent", "weight_tolerance_percent BETWEEN 0 AND 100");
                         });
                 });
 
@@ -529,13 +973,20 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<decimal?>("WeightTolerancePercent")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("weight_tolerance_percent");
+
                     b.HasKey("Id")
                         .HasName("pk_products");
 
                     b.HasIndex("CategoryId")
                         .HasDatabaseName("ix_products_category_id");
 
-                    b.ToTable("products", (string)null);
+                    b.ToTable("products", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_products_weight_tolerance_percent", "weight_tolerance_percent IS NULL OR weight_tolerance_percent BETWEEN 0 AND 100");
+                        });
                 });
 
             modelBuilder.Entity("SARE.Domain.Catalog.ProductOption", b =>
@@ -915,20 +1366,86 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_user_tokens_users_user_id");
                 });
 
-            modelBuilder.Entity("SARE.Domain.Cart.DetectionEvent", b =>
+            modelBuilder.Entity("SARE.Domain.Cart.CartBasketAudit", b =>
                 {
                     b.HasOne("SARE.Domain.Cart.Session", null)
                         .WithMany()
                         .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_detection_events_sessions_session_id");
+                        .HasConstraintName("fk_cart_basket_audits_sessions_session_id");
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartBasketAuditItem", b =>
+                {
+                    b.HasOne("SARE.Domain.Cart.CartBasketAudit", null)
+                        .WithMany("Items")
+                        .HasForeignKey("AuditId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cart_basket_audit_items_cart_basket_audits_audit_id");
+
+                    b.HasOne("SARE.Domain.Cart.SessionItem", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalSessionItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_cart_basket_audit_items_session_items_original_session_item");
+
+                    b.HasOne("SARE.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cart_basket_audit_items_product_variants_variant_id");
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartEventReceipt", b =>
+                {
+                    b.HasOne("SARE.Domain.Cart.CartMovement", null)
+                        .WithMany()
+                        .HasForeignKey("MovementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cart_event_receipts_cart_movements_movement_id");
+
+                    b.HasOne("SARE.Domain.Cart.Session", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cart_event_receipts_sessions_session_id");
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartMovement", b =>
+                {
+                    b.HasOne("SARE.Domain.Cart.Session", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cart_movements_sessions_session_id");
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartMovementItem", b =>
+                {
+                    b.HasOne("SARE.Domain.Cart.CartMovement", null)
+                        .WithMany("Items")
+                        .HasForeignKey("MovementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_cart_movement_items_cart_movements_movement_id");
 
                     b.HasOne("SARE.Domain.Cart.SessionItem", null)
                         .WithMany()
                         .HasForeignKey("SessionItemId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_detection_events_session_items_session_item_id");
+                        .HasConstraintName("fk_cart_movement_items_session_items_session_item_id");
+
+                    b.HasOne("SARE.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_cart_movement_items_product_variants_variant_id");
                 });
 
             modelBuilder.Entity("SARE.Domain.Cart.Session", b =>
@@ -1051,6 +1568,16 @@ namespace SARE.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartBasketAudit", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("SARE.Domain.Cart.CartMovement", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

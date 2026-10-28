@@ -29,7 +29,8 @@ POST and PUT accept:
   "nameAr": "شيبسي",
   "nameEn": "Chips",
   "imageUrl": "https://example.com/chips.jpg",
-  "isActive": true
+  "isActive": true,
+  "weightTolerancePercent": 3
 }
 ```
 
@@ -37,8 +38,21 @@ POST and PUT accept:
 - Both names are required, trimmed, and limited to 150 characters after trimming.
 - `imageUrl` is optional, trimmed, and limited to 500 characters. Empty text becomes `null`. Accepted locations are absolute HTTP(S) URLs or local paths beginning with a single `/`; other schemes and network paths are rejected.
 - `isActive` defaults to `true` if omitted. PUT replaces the basic fields; supply the desired status explicitly when editing.
+- `weightTolerancePercent` is optional: `null` uses `CartMovement:DefaultWeightTolerancePercent`
+  (3% by default). An explicit value from 0 to 100, with at most two decimal places,
+  overrides that setting for every Variant of this Product. Zero means no package-weight
+  allowance. PUT replaces this field too; send the current value to retain an override.
 
 The response includes basic fields, UTC `updatedAt`, both category names, `variantCount`, and `activeVariantCount`. `AppDbContext` stamps actual changes automatically. A no-op edit keeps the existing timestamp. The product price/weight remain on variants; they are not copied into the product table.
+
+Admin product responses, including lists/details and write responses, also include
+`weightTolerancePercent` (the nullable saved override) and
+`effectiveWeightTolerancePercent` (the override or configured default). The percentage
+applies to each Variant's own gross packaged `weightG`; for example, 3% allows ±3g
+on a 100g Variant and ±15g on a 500g Variant. Internal checks round fractional gram
+allowances upward. Invoice/audit pieces save the effective percentage with their
+weight; later Product edits do not change existing purchase snapshots. See
+[cart weight and recount rules](cart-staff-audit.md#weight-tolerance).
 
 PUT can move the product to another category. Its ID, options, variants, and invoice history remain associated with the same product. Creating a product does not create variants.
 

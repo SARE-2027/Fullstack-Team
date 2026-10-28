@@ -14,5 +14,14 @@ public class Session : BaseEntity
     public DateTime? ClosedAt { get; set; }
     public Guid? ClosedBy { get; set; }
     public CloseReason? CloseReason { get; set; }
+    public int LastMovementSequence { get; set; }
+    public int? BasketWeightG { get; set; }
+    public int PendingWeightG { get; set; }
+    public int PendingWeightUncertaintyG { get; set; }
+    public DateTime? StaffRequestedAt { get; set; }
+    public string? StaffRequestReason { get; set; }
+    // حد زمني صادر من السيرفر؛ التقارير المؤجلة من فترة الجرد لا تُحاسب بعد انتهائه.
+    public DateTime? LastAuditCompletedAtUtc { get; set; }
+    public BasketState BasketState { get; set; } = BasketState.Verified;
 
 }

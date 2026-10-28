@@ -20,6 +20,7 @@ public class SessionController(ISessionService sessionService) : ControllerBase
 
     // POST /api/sessions
     [HttpPost("sessions")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
     public async Task<IActionResult> StartSession(
         [FromBody] StartSessionRequest request,
         CancellationToken ct)
@@ -30,6 +31,7 @@ public class SessionController(ISessionService sessionService) : ControllerBase
 
     // GET /api/sessions/{id}
     [HttpGet("sessions/{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.CatalogRead)]
     public async Task<IActionResult> GetSessionSummary(Guid id, CancellationToken ct)
     {
         var result = await sessionService.GetSessionSummaryAsync(id, ct);
@@ -38,6 +40,7 @@ public class SessionController(ISessionService sessionService) : ControllerBase
 
     // POST /api/sessions/{id:guid}/close
     [HttpPost("sessions/{id:guid}/close")]
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
     public async Task<IActionResult> CloseSession(
         Guid id,
         [FromBody] CloseSessionRequest? request,

@@ -10,6 +10,8 @@ public sealed class ProductRequestValidator : AbstractValidator<ProductRequest>
         RuleFor(request => request.CategoryId).NotEmpty();
         RuleFor(request => request.NameAr).NotEmpty().MaximumLength(150);
         RuleFor(request => request.NameEn).NotEmpty().MaximumLength(150);
+        RuleFor(request => request.WeightTolerancePercent).InclusiveBetween(0m, 100m)
+            .PrecisionScale(5, 2, true);
         RuleFor(request => request.ImageUrl).MaximumLength(500)
             .Must(IsImageLocation).WithMessage("ImageUrl must be an HTTP(S) URL or a path beginning with a single '/'.");
     }

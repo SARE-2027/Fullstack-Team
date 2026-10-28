@@ -208,6 +208,16 @@ public class SessionService(
         // 2. التحقق من أن الجلسة ما زالت مفتوحة
         if (session.Status != SessionStatus.Open)
             throw new ConflictException($"الجلسة {sessionId} مغلقة بالفعل بحالة ({session.Status})");
+        if (await sessions.HasPendingChangesAsync(sessionId, ct))
+            throw new ConflictException("Resolve pending movements and removal requests before closing.", "PENDING_CHANGES");
+        if (session.LastMovementSequence > 0 && session.BasketWeightG.HasValue)
+        {
+            var snapshot = await GetSessionSummaryAsync(sessionId, ct);
+            var range = CartWeightPolicy.Sum(snapshot.Items.Where(item => item.BasketPresence == BasketPresence.Inside)
+                .Select(item => CartWeightRange.For(item.ExpectedWeightG, item.WeightTolerancePercent)));
+            if (!snapshot.ExpectedBasketWeightG.HasValue || !range.Contains(session.BasketWeightG.Value))
+                throw new ConflictException("Basket weight is not reconciled.", "BASKET_WEIGHT_MISMATCH");
+        }
 
         // 3. التحقق من وجود الموظف المغلق (إن وجد)
         if (request?.ClosedByUserId.HasValue == true)

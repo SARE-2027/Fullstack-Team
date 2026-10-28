@@ -3,6 +3,7 @@ using SARE.Application.Common.Interfaces;
 using SARE.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using SARE.Api.Authorization;
+using SARE.Api.Services;
 using SARE.Domain.Users;
 using SARE.Application.DTOs.Cart;
 using SARE.Application.Common.Exceptions;
@@ -14,7 +15,9 @@ public class CartHub(
     ICartRepository carts,
     ISessionRepository sessions,
     ISessionService sessionService,
-    ICartService cartService) : Hub
+    ICartService cartService,
+    ICartMovementService movementService,
+    CartRegistrationGate registrationGate) : Hub
 {
     private const string CartConnectionKey = "AuthenticatedCart";
     private sealed record CartConnection(string CartId, string HardwareToken);
@@ -22,16 +25,29 @@ public class CartHub(
 
     public static string SessionCartGroup(string cartId) => $"session_cart_{cartId}";
 
-    // First-time device provisioning is open for now; it does not join any groups.
+    // First-time device provisioning is anonymous while an admin keeps registration open; it does not join any groups.
     [AllowAnonymous]
     public Task<CartRegistrationResponse> RegisterCart(CreateCartRequest request) => ExecuteAsync(async () =>
     {
+        if (!registrationGate.IsOpen)
+            throw new HubException("REGISTRATION_CLOSED: Cart registration is closed. An admin must open it first.");
         if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
         if (Context.Items.ContainsKey(CartConnectionKey))
             throw new HubException("CART_ALREADY_JOINED: This connection already has a cart identity.");
 
         return await cartService.RegisterCartAsync(request, Context.ConnectionAborted);
     });
+
+    // الأدمن يفتح/يقفل تسجيل العربات الجديدة، ويرجع الحالة بعد التعديل.
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public bool SetCartRegistrationOpen(bool open)
+    {
+        registrationGate.Set(open);
+        return registrationGate.IsOpen;
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public bool GetCartRegistrationOpen() => registrationGate.IsOpen;
 
     [Authorize(Policy = AuthorizationPolicies.Admin)]
     public Task JoinSessionsGroup()
@@ -67,7 +83,6 @@ public class CartHub(
             await LeaveCartGroup(connection.CartId);
 
         await Groups.AddToGroupAsync(Context.ConnectionId, $"cart_{cartId}");
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"Cart_{cartId}");
         // Admins receive SessionUpdated through JoinSessionsGroup, avoiding overlapping recipients.
         if (Context.User?.IsInRole(UserRoles.Admin) != true)
         {
@@ -83,7 +98,6 @@ public class CartHub(
     public async Task LeaveCartGroup(string cartId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"cart_{cartId}");
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"Cart_{cartId}");
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, SessionCartGroup(cartId));
         if (Context.Items.TryGetValue(CartConnectionKey, out var value)
             && value is CartConnection connection && connection.CartId == cartId)
@@ -100,22 +114,51 @@ public class CartHub(
             new StartSessionRequest(connection.CartId, request.NfcUid), Context.ConnectionAborted);
     });
 
-    public Task<CartItemProcessResult> ProcessItemDetection(Guid sessionId, CartAddItemRequest request) => ExecuteAsync(async () =>
-    {
-        var connection = await RequireCartAsync();
-        await RequireCartSessionAsync(connection.CartId, sessionId);
-        if (request?.EventId is null || request.EventId == Guid.Empty)
-            throw new HubException("VALIDATION_FAILED: A stable, non-empty eventId is required.");
-
-        return await cartService.ProcessItemDetectionAsync(sessionId, request, Context.ConnectionAborted);
-    });
-
     public Task<CartTelemetryResponse> UpdateCartTelemetry(UpdateCartTelemetryRequest request) => ExecuteAsync(async () =>
     {
         var connection = await RequireCartAsync();
         if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
         return await sessionService.UpdateCartTelemetryAsync(
             connection.CartId, request, connection.HardwareToken, Context.ConnectionAborted);
+    });
+
+    public Task<CartMovementResult> ReportCartMovement(Guid sessionId, CartMovementRequest request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        return await movementService.ReportAsync(sessionId, request, Context.ConnectionAborted);
+    });
+
+    // القرار يخص تقرير خروج ونسخة سيشن محددين، وبنفس تحقق ملكية العربة.
+    public Task<CartMovementResult> ConfirmExitChoice(Guid sessionId, ConfirmExitChoiceRequest request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        return await movementService.ConfirmExitAsync(sessionId, request, Context.ConnectionAborted);
+    });
+
+    public Task<CartSummaryResponse> RemoveSessionItem(Guid sessionId, Guid itemId) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        return await movementService.SetRemovalRequestAsync(sessionId, itemId, true, Context.ConnectionAborted);
+    });
+
+    public Task<CartSummaryResponse> CancelItemRemoval(Guid sessionId, Guid itemId) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        return await movementService.SetRemovalRequestAsync(sessionId, itemId, false, Context.ConnectionAborted);
+    });
+
+    public Task<CartMovementResult> RequestStaff(Guid sessionId, CartAuditCommand request) => ExecuteAsync(async () =>
+    {
+        var connection = await RequireCartAsync();
+        await RequireCartSessionAsync(connection.CartId, sessionId);
+        if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
+        return await movementService.RequestStaffAsync(sessionId, request, Context.ConnectionAborted);
     });
 
     public Task<CartSummaryResponse> CloseSession(Guid sessionId) => ExecuteAsync(async () =>
@@ -166,7 +209,4 @@ public class CartHub(
             throw new HubException("CONFLICT: Session changed concurrently. Synchronize and retry with the same eventId.");
         }
     }
-
-    [Authorize(Policy = AuthorizationPolicies.CatalogRead)]
-    public Task JoinDashboardGroup() => Groups.AddToGroupAsync(Context.ConnectionId, "StoreDashboard");
 }
