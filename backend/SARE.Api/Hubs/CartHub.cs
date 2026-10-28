@@ -3,6 +3,7 @@ using SARE.Application.Common.Interfaces;
 using SARE.Application.Common.Security;
 using Microsoft.AspNetCore.Authorization;
 using SARE.Api.Authorization;
+using SARE.Api.Services;
 using SARE.Domain.Users;
 using SARE.Application.DTOs.Cart;
 using SARE.Application.Common.Exceptions;
@@ -15,7 +16,8 @@ public class CartHub(
     ISessionRepository sessions,
     ISessionService sessionService,
     ICartService cartService,
-    ICartMovementService movementService) : Hub
+    ICartMovementService movementService,
+    CartRegistrationGate registrationGate) : Hub
 {
     private const string CartConnectionKey = "AuthenticatedCart";
     private sealed record CartConnection(string CartId, string HardwareToken);
@@ -23,16 +25,29 @@ public class CartHub(
 
     public static string SessionCartGroup(string cartId) => $"session_cart_{cartId}";
 
-    // First-time device provisioning is open for now; it does not join any groups.
+    // First-time device provisioning is anonymous while an admin keeps registration open; it does not join any groups.
     [AllowAnonymous]
     public Task<CartRegistrationResponse> RegisterCart(CreateCartRequest request) => ExecuteAsync(async () =>
     {
+        if (!registrationGate.IsOpen)
+            throw new HubException("REGISTRATION_CLOSED: Cart registration is closed. An admin must open it first.");
         if (request is null) throw new HubException("VALIDATION_FAILED: Request is required.");
         if (Context.Items.ContainsKey(CartConnectionKey))
             throw new HubException("CART_ALREADY_JOINED: This connection already has a cart identity.");
 
         return await cartService.RegisterCartAsync(request, Context.ConnectionAborted);
     });
+
+    // الأدمن يفتح/يقفل تسجيل العربات الجديدة، ويرجع الحالة بعد التعديل.
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public bool SetCartRegistrationOpen(bool open)
+    {
+        registrationGate.Set(open);
+        return registrationGate.IsOpen;
+    }
+
+    [Authorize(Policy = AuthorizationPolicies.Admin)]
+    public bool GetCartRegistrationOpen() => registrationGate.IsOpen;
 
     [Authorize(Policy = AuthorizationPolicies.Admin)]
     public Task JoinSessionsGroup()

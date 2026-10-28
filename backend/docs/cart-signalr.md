@@ -39,8 +39,9 @@ the exact positional order used by the client's `invoke` call.
 | CloseSession | sessionId. | Full closed session. Pending mass, unresolved exits, staff review, missing Inside weights and removal requests block closure. |
 | LeaveCartGroup | cartId. | No result; removes subscriptions and command access for the bound cart. |
 
-RegisterCart is currently open to anonymous callers and does not join the cart.
-An enrollment toggle is deferred. Unprovisioned/invalid credentials cannot read a
+RegisterCart is anonymous but works only while an admin has opened registration
+(closed by default, in-memory, closed again after a server restart); otherwise it
+fails with REGISTRATION_CLOSED. It does not join the cart. Unprovisioned/invalid credentials cannot read a
 cart's session. Replaced credentials cannot continue issuing commands.
 
 ## Admin/dashboard subscriptions
@@ -52,7 +53,10 @@ These use the connection's JWT and do not require a device join. Configure
 | --- | --- | --- |
 | JoinSessionsGroup | None. | Admin; subscribes to SessionUpdated for all carts. Initial collection: GET /api/sessions. |
 | LeaveSessionsGroup | None. | Admin; unsubscribes from all-session updates. |
-Administrative mutations use **HTTP endpoints only**. The hub has no administrator
+| SetCartRegistrationOpen | open (bool). | Admin; opens/closes anonymous RegisterCart and returns the new state. In-memory, closed by default. |
+| GetCartRegistrationOpen | None. | Admin; returns whether RegisterCart is currently open. |
+
+Apart from the registration toggle, administrative mutations use **HTTP endpoints only**. The hub has no administrator
 recount methods, even when connected with an Admin JWT. Admin role
 checks here protect subscription to all sessions; devices need their hardware
 credential and bound session, not a customer JWT or an Admin role.
