@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_typography.dart';
 
 /// Touch-kiosk text widget featuring Arabic baseline vertical alignment hardening
-/// (`forceStrutHeight`), strikethrough styling for discount prices, and typography presets.
+/// (`forceStrutHeight`), optional tabular numerals (`tabularFigures`),
+/// strikethrough styling for discount prices, and optical typography presets.
 class CustomText extends StatelessWidget {
   const CustomText(
     this.text, {
@@ -18,6 +19,8 @@ class CustomText extends StatelessWidget {
     this.decorationColor,
     this.fontFamily,
     this.letterSpacing,
+    this.tabularFigures = false,
+    this.height,
   });
 
   final String text;
@@ -27,14 +30,18 @@ class CustomText extends StatelessWidget {
   final TextAlign? textAlign;
   final int? maxLines;
 
-  /// Prevents Arabic vertical glyph shifting relative to adjacent latin numerals
+  /// Prevents Arabic vertical glyph shifting relative to adjacent Latin numerals.
   final bool forceStrutHeight;
 
-  /// Used for displaying crossed-out original prices on discount items
+  /// Used for displaying crossed-out original prices on discount items.
   final bool isStrikethrough;
   final Color? decorationColor;
   final String? fontFamily;
   final double? letterSpacing;
+
+  /// Locks numeric character widths so live counters and prices never jitter.
+  final bool tabularFigures;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
@@ -54,19 +61,24 @@ class CustomText extends StatelessWidget {
           ? StrutStyle(
               forceStrutHeight: true,
               fontSize: fontSize,
+              height: height,
               fontFamily: resolvedFontFamily,
             )
           : null,
       style: TextStyle(
         fontFamily: resolvedFontFamily,
         fontSize: fontSize,
+        height: height,
         fontWeight: fontWeight ?? FontWeight.normal,
         color: color ?? theme.colorScheme.onSurface,
-        letterSpacing: letterSpacing,
+        letterSpacing: isArabic ? null : letterSpacing,
+        fontFeatures:
+            tabularFigures ? const [FontFeature.tabularFigures()] : null,
         decoration: isStrikethrough
             ? TextDecoration.lineThrough
             : TextDecoration.none,
-        decorationColor: decorationColor ?? color ?? theme.colorScheme.onSurface,
+        decorationColor:
+            decorationColor ?? color ?? theme.colorScheme.onSurface,
       ),
     );
   }

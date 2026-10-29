@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/utils/kiosk_formatter.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../session/data/models/session_models.dart';
@@ -39,9 +39,10 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   final TextEditingController _barcodeCtrl = TextEditingController();
-  final TextEditingController _weightCtrl = TextEditingController();
+  final ScrollController _itemsScrollCtrl = ScrollController();
   final StringBuffer _hidBuffer = StringBuffer();
   DateTime? _lastHidKeystroke;
+  int _lastKnownItemsCount = 0;
 
   @override
   void initState() {
@@ -60,7 +61,7 @@ class _CartScreenState extends State<CartScreen> {
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleHardwareKey);
     _barcodeCtrl.dispose();
-    _weightCtrl.dispose();
+    _itemsScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -100,15 +101,11 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _handleAdd() async {
-    final rawWeight = _weightCtrl.text.trim();
-    final weight = rawWeight.isEmpty ? null : int.tryParse(rawWeight);
     final ok = await context.read<CartCubit>().addItemByScan(
           _barcodeCtrl.text,
-          measuredWeightG: weight,
         );
     if (ok && mounted) {
       _barcodeCtrl.clear();
-      _weightCtrl.clear();
     }
   }
 
@@ -121,6 +118,23 @@ class _CartScreenState extends State<CartScreen> {
           product.barcode,
           measuredWeightG: simulatedWeight,
         );
+  }
+
+  void _scrollToNewestItemIfNeeded(int currentCount) {
+    if (currentCount > _lastKnownItemsCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_itemsScrollCtrl.hasClients) return;
+        final target = _itemsScrollCtrl.position.maxScrollExtent;
+        if (target > 0) {
+          _itemsScrollCtrl.animateTo(
+            target,
+            duration: AppTypography.base,
+            curve: AppTypography.enterCurve,
+          );
+        }
+      });
+    }
+    _lastKnownItemsCount = currentCount;
   }
 
   Future<void> _handleEndSession(SessionSummary session) async {
@@ -222,6 +236,10 @@ class _CartScreenState extends State<CartScreen> {
             final session = sessionState.session;
             final colors = context.colors;
 
+            if (session != null) {
+              _scrollToNewestItemIfNeeded(session.items.length);
+            }
+
             final banner = _buildBanner(
               context,
               l10n,
@@ -306,7 +324,9 @@ class _CartScreenState extends State<CartScreen> {
                       ? Icons.verified_user_rounded
                       : Icons.person_outline_rounded,
                   size: 16,
-                  color: session.isMember ? colors.verified : colors.textSecondary,
+                  color: session.isMember
+                      ? colors.verified
+                      : colors.textSecondary,
                 ),
                 label: shopperLabel,
               ),
@@ -319,34 +339,39 @@ class _CartScreenState extends State<CartScreen> {
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 960;
                   return Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 6, 24, 16),
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 14),
                     child: Column(
                       children: [
                         RepaintBoundary(
                           child: ScanBar(
                             barcodeController: _barcodeCtrl,
-                            weightController: _weightCtrl,
                             isAdding: cartState.isAdding,
                             onAdd: _handleAdd,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         Expanded(
                           child: isWide
                               ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       flex: 3,
                                       child: _buildItemsList(
-                                          session, l10n, colors),
+                                        session,
+                                        l10n,
+                                        colors,
+                                      ),
                                     ),
-                                    const SizedBox(width: 18),
+                                    const SizedBox(width: 16),
                                     SizedBox(
-                                      width: 350,
+                                      width: 356,
                                       child: SingleChildScrollView(
                                         child: _buildSidePanel(
-                                            session, cartState),
+                                          session,
+                                          cartState,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -355,14 +380,17 @@ class _CartScreenState extends State<CartScreen> {
                                   children: [
                                     Expanded(
                                       child: _buildItemsList(
-                                          session, l10n, colors),
+                                        session,
+                                        l10n,
+                                        colors,
+                                      ),
                                     ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 10),
                                     _buildSidePanel(session, cartState),
                                   ],
                                 ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         RepaintBoundary(
                           child: SensorSimulatorStrip(
                             isBusy: cartState.isAdding,
@@ -390,12 +418,9 @@ class _CartScreenState extends State<CartScreen> {
   ) {
     switch (cartState.bannerKind) {
       case WeightBannerKind.verifying:
-        return KioskStatusBanner(
-          key: const ValueKey('banner-verifying'),
-          message: l10n.weightVerifying,
-          status: KioskBannerStatus.info,
-          icon: Icons.scale_rounded,
-        );
+        // Suppress transient verifying flash so successful scans feel instant
+        // and calm without flickering between blue and green banners.
+        return null;
       case WeightBannerKind.success:
         final itemName = locale == 'ar'
             ? cartState.lastItemNameAr
@@ -429,20 +454,7 @@ class _CartScreenState extends State<CartScreen> {
           onAction: () => context.read<CartCubit>().dismissBanner(),
         );
       case WeightBannerKind.mismatch:
-        String msg = cartState.bannerMessage ?? l10n.weightMismatchWarning;
-        if (cartState.lastExpectedG != null &&
-            cartState.lastMeasuredG != null) {
-          final expStr = KioskFormatter.formatWeight(
-            cartState.lastExpectedG!.toDouble(),
-            locale,
-          );
-          final measStr = KioskFormatter.formatWeight(
-            cartState.lastMeasuredG!.toDouble(),
-            locale,
-          );
-          msg =
-              '${l10n.weightMismatchWarning} (${l10n.weightMismatchDetail(expStr, measStr)})';
-        }
+        final msg = cartState.bannerMessage ?? l10n.weightMismatchWarning;
         return KioskStatusBanner(
           key: ValueKey('banner-mismatch-$msg'),
           message: msg,
@@ -472,50 +484,72 @@ class _CartScreenState extends State<CartScreen> {
     final items = session.items;
     if (items.isEmpty) {
       return KioskSurfaceCard(
-        borderRadius: 18,
+        borderRadius: 20,
         padding: EdgeInsets.zero,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CustomPaint(
-                  size: const Size(110, 110),
-                  painter: _DashedRingPainter(color: colors.borderStrong),
-                  child: SizedBox(
-                    width: 110,
-                    height: 110,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: colors.brand.withValues(alpha: 0.06),
+                      border: Border.all(
+                        color: colors.brand.withValues(alpha: 0.16),
+                        width: 1.2,
+                      ),
+                    ),
                     child: Center(
-                      child: Icon(
-                        Icons.shopping_bag_outlined,
-                        size: 42,
-                        color: colors.textFaint,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: colors.brandGradient,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: colors.brandGlow,
+                              blurRadius: 18,
+                              offset: const Offset(0, 6),
+                              spreadRadius: -4,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.shopping_bag_rounded,
+                          size: 26,
+                          color: colors.onBrand,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                CustomText(
-                  l10n.emptyCartTitle,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-                const SizedBox(height: 6),
-                CustomText(
-                  l10n.emptyCartMessage,
-                  fontSize: 13,
-                  color: colors.textSecondary,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                CustomText(
-                  l10n.emptyCartHint,
-                  fontSize: 12,
-                  color: colors.textFaint,
-                  textAlign: TextAlign.center,
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  CustomText(
+                    l10n.emptyCartTitle,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  const SizedBox(height: 6),
+                  CustomText(
+                    l10n.emptyCartMessage,
+                    fontSize: 13.5,
+                    color: colors.textSecondary,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  CustomText(
+                    l10n.emptyCartHint,
+                    fontSize: 12,
+                    color: colors.textFaint,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -523,6 +557,8 @@ class _CartScreenState extends State<CartScreen> {
     }
     return RepaintBoundary(
       child: ListView.separated(
+        controller: _itemsScrollCtrl,
+        padding: const EdgeInsets.only(bottom: 4),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
@@ -546,45 +582,12 @@ class _CartScreenState extends State<CartScreen> {
         totalMinor: session.totalMinor,
         totalWeightG: session.totalExpectedWeightG,
         isBusy: cartState.isAdding,
+        hasDiscrepancy: cartState.bannerKind == WeightBannerKind.mismatch,
+        isVerifying: cartState.bannerKind == WeightBannerKind.verifying,
         onCheckout: () {
           context.push('${AppRoutes.checkout}?sessionId=${session.sessionId}');
         },
       ),
     );
   }
-}
-
-/// Quiet dashed ring framing the empty-basket state — echoes the basket
-/// without introducing a new illustration language.
-class _DashedRingPainter extends CustomPainter {
-  _DashedRingPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    final radius = size.width / 2 - 2;
-    const dashCount = 26;
-    const gap = 0.55;
-    const sweep = (2 * 3.141592653589793) / dashCount;
-    final center = Offset(size.width / 2, size.height / 2);
-    for (var i = 0; i < dashCount; i++) {
-      final start = i * sweep;
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius),
-        start,
-        sweep * (1 - gap),
-        false,
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedRingPainter oldDelegate) =>
-      color != oldDelegate.color;
 }

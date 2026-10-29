@@ -5,10 +5,11 @@ import 'custom_text.dart';
 
 enum KioskBannerStatus { verified, warning, discrepancy, info }
 
-/// Status banner for cart balance, scale verification, and hardware events.
+/// Precision sensor-fusion status banner for load-cell verification, undo
+/// windows, and discrepancy alerts.
 ///
-/// The leading icon sits in a tinted rounded chip so the state reads from
-/// across the aisle; color always pairs with an icon (never color alone).
+/// Combines a glowing status squircle, high-contrast message typography, and
+/// a tactile action pill (never relying on color alone).
 class KioskStatusBanner extends StatelessWidget {
   const KioskStatusBanner({
     super.key,
@@ -40,45 +41,60 @@ class KioskStatusBanner extends StatelessWidget {
         defaultIcon = Icons.warning_amber_rounded;
       case KioskBannerStatus.discrepancy:
         primaryColor = colors.danger;
-        defaultIcon = Icons.error_outline_rounded;
+        defaultIcon = Icons.gpp_bad_rounded;
       case KioskBannerStatus.info:
         primaryColor = colors.info;
-        defaultIcon = Icons.info_outline_rounded;
+        defaultIcon = Icons.sensors_rounded;
     }
 
     return RepaintBoundary(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        constraints: const BoxConstraints(maxWidth: 640),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: primaryColor.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(14),
+          color: colors.surfaceRaised,
+          borderRadius: BorderRadius.circular(999),
           border: Border.all(
-            color: primaryColor.withValues(alpha: 0.38),
+            color: primaryColor.withValues(alpha: 0.50),
             width: 1.4,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+              spreadRadius: -4,
+            ),
+            BoxShadow(
+              color: primaryColor.withValues(alpha: 0.16),
+              blurRadius: 16,
+              offset: const Offset(0, 2),
+              spreadRadius: -2,
+            ),
+          ],
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
-                color: primaryColor.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(12),
+                color: primaryColor.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
               ),
               child: Icon(
                 icon ?? defaultIcon,
                 color: primaryColor,
-                size: 22,
+                size: 19,
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
+            const SizedBox(width: 12),
+            Flexible(
               child: CustomText(
                 message,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: primaryColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
                 maxLines: 2,
               ),
             ),
@@ -88,18 +104,22 @@ class KioskStatusBanner extends StatelessWidget {
                 onPressed: onAction,
                 style: TextButton.styleFrom(
                   foregroundColor: primaryColor,
-                  backgroundColor: primaryColor.withValues(alpha: 0.12),
+                  backgroundColor: primaryColor.withValues(alpha: 0.14),
+                  minimumSize: const Size(56, 34),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
+                    horizontal: 14,
+                    vertical: 6,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(999),
+                    side: BorderSide(
+                      color: primaryColor.withValues(alpha: 0.30),
+                    ),
                   ),
                 ),
                 child: CustomText(
                   actionLabel!,
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w700,
                   color: primaryColor,
                 ),

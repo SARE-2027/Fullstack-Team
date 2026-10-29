@@ -15,7 +15,7 @@ class ApiClient {
   ApiClient({
     required String baseUrl,
     http.Client? httpClient,
-    Duration timeout = const Duration(milliseconds: 2500),
+    Duration timeout = const Duration(milliseconds: 1200),
   })  : _baseUrl = baseUrl.endsWith('/')
             ? baseUrl.substring(0, baseUrl.length - 1)
             : baseUrl,

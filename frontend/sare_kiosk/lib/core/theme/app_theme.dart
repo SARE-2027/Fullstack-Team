@@ -4,13 +4,12 @@ import 'app_colors.dart';
 import 'app_typography.dart';
 
 abstract final class AppTheme {
-  /// Dark Theme: Primary mode for the 10.1" smart cart touchscreen.
-  /// Neutral charcoal surfaces keep the royal-blue CTAs and the emerald
-  /// verification signals unambiguous.
+  /// Dark Theme: "Obsidian Titanium Cockpit" — default mode for the 10.1"
+  /// smart cart touchscreen under bright overhead supermarket lighting.
   static final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    scaffoldBackgroundColor: const Color(0xFF0E1116),
+    scaffoldBackgroundColor: const Color(0xFF090C12),
     primaryColor: AppColorTheme.dark.brandDeep,
     cardColor: AppColorTheme.dark.surface,
     dividerColor: AppColorTheme.dark.border,
@@ -18,14 +17,14 @@ abstract final class AppTheme {
     highlightColor: Colors.white.withValues(alpha: 0.04),
     colorScheme: ColorScheme.dark(
       surface: AppColorTheme.dark.surface,
-      onSurface: const Color(0xFFF2F5F9),
+      onSurface: const Color(0xFFF4F7FB),
       surfaceContainerHighest: AppColorTheme.dark.surfaceAlt,
       primary: AppColorTheme.dark.brandDeep,
       onPrimary: AppColorTheme.dark.onBrand,
       secondary: AppColorTheme.dark.brandGradientEnd,
       onSecondary: AppColorTheme.dark.onBrand,
       error: AppColorTheme.dark.danger,
-      onError: const Color(0xFF2A0B0B),
+      onError: const Color(0xFF280808),
       outline: AppColorTheme.dark.borderStrong,
     ),
     textTheme: AppTypography.createTextTheme(Brightness.dark),
@@ -33,7 +32,7 @@ abstract final class AppTheme {
     appBarTheme: const AppBarTheme(
       centerTitle: true,
       backgroundColor: Colors.transparent,
-      foregroundColor: Color(0xFFF1F7F3),
+      foregroundColor: Color(0xFFF4F7FB),
       elevation: 0,
       scrolledUnderElevation: 0,
     ),
@@ -59,7 +58,7 @@ abstract final class AppTheme {
       backgroundColor: AppColorTheme.dark.surfaceRaised,
       contentTextStyle: const TextStyle(
         fontFamily: AppTypography.englishFontFamily,
-        color: Color(0xFFF1F7F3),
+        color: Color(0xFFF4F7FB),
         fontSize: 14,
         fontWeight: FontWeight.w600,
       ),
@@ -90,7 +89,7 @@ abstract final class AppTheme {
         foregroundColor: AppColorTheme.dark.onBrand,
         disabledBackgroundColor: AppColorTheme.dark.surfaceAlt,
         disabledForegroundColor: AppColorTheme.dark.textFaint,
-        minimumSize: const Size(64, 56),
+        minimumSize: const Size(64, 54),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(
           fontFamily: AppTypography.englishFontFamily,
@@ -101,9 +100,9 @@ abstract final class AppTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFFF1F7F3),
+        foregroundColor: const Color(0xFFF4F7FB),
         side: BorderSide(color: AppColorTheme.dark.borderStrong),
-        minimumSize: const Size(64, 56),
+        minimumSize: const Size(64, 54),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(
           fontFamily: AppTypography.englishFontFamily,
@@ -127,12 +126,12 @@ abstract final class AppTheme {
     ],
   );
 
-  /// Light Theme: Crisp porcelain daytime mode with the same
-  /// verification-first color semantics.
+  /// Light Theme: "Porcelain Alabaster Studio" — crisp high-contrast daylight
+  /// mode with identical verification-first semantics.
   static final ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    scaffoldBackgroundColor: const Color(0xFFF5F6F8),
+    scaffoldBackgroundColor: const Color(0xFFF3F6FA),
     primaryColor: AppColorTheme.light.brandDeep,
     cardColor: AppColorTheme.light.surface,
     dividerColor: AppColorTheme.light.border,
@@ -140,7 +139,7 @@ abstract final class AppTheme {
     highlightColor: AppColorTheme.light.brandDeep.withValues(alpha: 0.05),
     colorScheme: ColorScheme.light(
       surface: AppColorTheme.light.surface,
-      onSurface: const Color(0xFF10141A),
+      onSurface: const Color(0xFF0D131D),
       surfaceContainerHighest: AppColorTheme.light.surfaceAlt,
       primary: AppColorTheme.light.brandDeep,
       onPrimary: AppColorTheme.light.onBrand,
@@ -155,7 +154,7 @@ abstract final class AppTheme {
     appBarTheme: const AppBarTheme(
       centerTitle: true,
       backgroundColor: Colors.transparent,
-      foregroundColor: Color(0xFF11241B),
+      foregroundColor: Color(0xFF0D131D),
       elevation: 0,
       scrolledUnderElevation: 0,
     ),
@@ -181,7 +180,7 @@ abstract final class AppTheme {
       backgroundColor: AppColorTheme.light.surface,
       contentTextStyle: const TextStyle(
         fontFamily: AppTypography.englishFontFamily,
-        color: Color(0xFF11241B),
+        color: Color(0xFF0D131D),
         fontSize: 14,
         fontWeight: FontWeight.w600,
       ),
@@ -212,7 +211,7 @@ abstract final class AppTheme {
         foregroundColor: AppColorTheme.light.onBrand,
         disabledBackgroundColor: AppColorTheme.light.surfaceAlt,
         disabledForegroundColor: AppColorTheme.light.textFaint,
-        minimumSize: const Size(64, 56),
+        minimumSize: const Size(64, 54),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(
           fontFamily: AppTypography.englishFontFamily,
@@ -223,9 +222,9 @@ abstract final class AppTheme {
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF11241B),
+        foregroundColor: const Color(0xFF0D131D),
         side: BorderSide(color: AppColorTheme.light.borderStrong),
-        minimumSize: const Size(64, 56),
+        minimumSize: const Size(64, 54),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         textStyle: const TextStyle(
           fontFamily: AppTypography.englishFontFamily,

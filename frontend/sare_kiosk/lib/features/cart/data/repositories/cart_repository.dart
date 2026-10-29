@@ -58,11 +58,21 @@ class CartRepository {
       if (json == null) {
         return const Left(ServerFailure('Empty response from server'));
       }
-      final result = AddItemResult.fromJson(_normalizeAddItemJson(json));
-      if (result.session != null) {
-        _localEngine.cacheSession(result.session!);
+      final rawResult = AddItemResult.fromJson(_normalizeAddItemJson(json));
+      final enrichedResult = AddItemResult(
+        success: rawResult.success,
+        message: rawResult.message,
+        isWeightMismatch: rawResult.isWeightMismatch,
+        expectedWeightG: rawResult.expectedWeightG ?? catalogProduct?.weightG,
+        measuredWeightG: rawResult.measuredWeightG ?? effectiveWeightG,
+        session: rawResult.session,
+        itemNameAr: rawResult.itemNameAr ?? catalogProduct?.nameAr,
+        itemNameEn: rawResult.itemNameEn ?? catalogProduct?.nameEn,
+      );
+      if (enrichedResult.session != null) {
+        _localEngine.cacheSession(enrichedResult.session!);
       }
-      return Right(result);
+      return Right(enrichedResult);
     } on ApiException catch (e) {
       if (e.statusCode == 400 || e.statusCode == 409 || e.statusCode == 404) {
         try {
@@ -70,7 +80,19 @@ class CartRepository {
             final decoded = jsonDecode(e.rawBody!);
             if (decoded is Map<String, dynamic>) {
               if (decoded.containsKey('isWeightMismatch') || decoded.containsKey('IsWeightMismatch')) {
-                return Right(AddItemResult.fromJson(_normalizeAddItemJson(decoded)));
+                final parsed = AddItemResult.fromJson(_normalizeAddItemJson(decoded));
+                if (parsed.isWeightMismatch) {
+                  return Right(AddItemResult(
+                    success: parsed.success,
+                    message: parsed.message,
+                    isWeightMismatch: true,
+                    expectedWeightG: parsed.expectedWeightG ?? catalogProduct?.weightG,
+                    measuredWeightG: parsed.measuredWeightG ?? effectiveWeightG,
+                    session: parsed.session,
+                    itemNameAr: catalogProduct?.nameAr,
+                    itemNameEn: catalogProduct?.nameEn,
+                  ));
+                }
               }
             }
           }
@@ -89,6 +111,17 @@ class CartRepository {
             itemNameAr: catalogProduct?.nameAr,
             itemNameEn: catalogProduct?.nameEn,
           ));
+        }
+
+        // If backend returned 404 for a valid local catalog item (items 4-7 not in backend DB), fall back to local engine
+        if (e.statusCode == 404 && catalogProduct != null && cachedSession != null) {
+          final localResult = _localEngine.processItemDetection(
+            sessionId: sessionId,
+            barcode: normalizedBarcode,
+            measuredWeightG: effectiveWeightG,
+            source: source,
+          );
+          return Right(localResult);
         }
         return Left(ServerFailure(e.error.displayMessage));
       }
@@ -115,9 +148,9 @@ class CartRepository {
     required String sessionId,
     required String itemId,
   }) async {
-    final updated = _localEngine.removeItem(sessionId: sessionId, itemId: itemId);
-    if (updated != null) {
-      return Right(updated);
+    final updatedLocal = _localEngine.removeItem(sessionId: sessionId, itemId: itemId);
+    if (updatedLocal != null) {
+      return Right(updatedLocal);
     }
     return const Left(ServerFailure('Could not remove item from session.'));
   }
@@ -132,6 +165,7 @@ class CartRepository {
     if (current == null || !current.isOpen) {
       return const Left(ServerFailure('Active session not found.'));
     }
+
     final updatedItems = [...current.items, item];
     final updatedTotal =
         updatedItems.fold<int>(0, (sum, i) => sum + i.unitPriceMinor);

@@ -2,21 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../../../core/utils/kiosk_formatter.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/custom_text.dart';
 import '../../../../core/widgets/kiosk_surface_card.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/local_smart_cart_engine.dart';
 
-/// Interactive hardware & catalog simulator for the 10.1" kiosk.
+/// Quick Products & Demo Bar for the 10.1" SARE kiosk.
 ///
-/// Enables instant testing of:
-/// 1. Valid barcode / vision scan + matching load-cell weight delta (±15g).
-/// 2. Fraud / weight discrepancy alert (barcode swapped or mismatched weight).
+/// Enables 1-tap product addition and committee demonstrations of:
+/// 1. Instant verified product scan (`+ Scan (Match)`).
+/// 2. Weight discrepancy alert (`Fraud (+95g)`).
 ///
-/// Collapsible so real shoppers see a clean cart screen while demo operators
-/// keep one tap access to the full sensor bench.
+/// Collapsible with spring physics so shoppers enjoy a calm, uncluttered
+/// interface while keeping instant access to all 7 catalog items.
 class SensorSimulatorStrip extends StatefulWidget {
   const SensorSimulatorStrip({
     super.key,
@@ -42,44 +41,52 @@ class _SensorSimulatorStripState extends State<SensorSimulatorStrip> {
     final locale = Localizations.localeOf(context).languageCode;
 
     return KioskSurfaceCard(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
       borderRadius: 18,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(7),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: colors.brand.withValues(alpha: 0.10),
+                  color: colors.brand.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(9),
+                  border: Border.all(
+                    color: colors.brand.withValues(alpha: 0.25),
+                  ),
                 ),
                 child: Icon(
-                  Icons.sensors_rounded,
-                  size: 16,
+                  Icons.grid_view_rounded,
+                  size: 14,
                   color: colors.brand,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    CustomText(
-                      l10n.simulatorTitle,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      maxLines: 1,
-                    ),
-                    if (_expanded)
-                      CustomText(
-                        l10n.simulatorSubtitle,
-                        fontSize: 11,
-                        color: colors.textFaint,
+                    Flexible(
+                      child: CustomText(
+                        l10n.simulatorTitle,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
                         maxLines: 1,
                       ),
+                    ),
+                    if (_expanded) ...[
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: CustomText(
+                          '•  ${l10n.simulatorSubtitle}',
+                          fontSize: 11,
+                          color: colors.textFaint,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -93,119 +100,109 @@ class _SensorSimulatorStripState extends State<SensorSimulatorStrip> {
           ),
           AnimatedSize(
             duration: AppTypography.slow,
-            curve: Curves.easeInOutCubic,
+            curve: AppTypography.enterCurve,
             alignment: Alignment.topCenter,
             child: _expanded
                 ? Padding(
-                    padding: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.only(top: 8),
                     child: SizedBox(
-                      height: 118,
+                      height: 84,
                       child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: LocalSmartCartEngine.catalog.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 10),
-                          itemBuilder: (context, index) {
-                            final product =
-                                LocalSmartCartEngine.catalog[index];
-                            final priceStr = Money.formatMinor(
-                              product.priceMinor,
-                              locale,
-                              symbol: ' ${l10n.currencySymbol}',
-                            );
-                            final weightStr = KioskFormatter.formatWeight(
-                              product.weightG.toDouble(),
-                              locale,
-                            );
+                        scrollDirection: Axis.horizontal,
+                        itemCount: LocalSmartCartEngine.catalog.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 10),
+                        itemBuilder: (context, index) {
+                          final product = LocalSmartCartEngine.catalog[index];
+                          final priceStr = Money.formatMinor(
+                            product.priceMinor,
+                            locale,
+                            symbol: ' ${l10n.currencySymbol}',
+                          );
 
-                            return Container(
-                              width: 250,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: colors.surfaceAlt,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: colors.border),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              colors.brand.withValues(alpha: 0.10),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Icon(
-                                          product.icon,
-                                          size: 16,
-                                          color: colors.brand,
-                                        ),
+                          return Container(
+                            width: 244,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.surfaceAlt,
+                              borderRadius: BorderRadius.circular(13),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(5),
+                                      decoration: BoxDecoration(
+                                        color: colors.brand
+                                            .withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(7),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: CustomText(
-                                          product.displayName(locale),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          maxLines: 1,
-                                        ),
+                                      child: Icon(
+                                        product.icon,
+                                        size: 14,
+                                        color: colors.brand,
                                       ),
-                                    ],
-                                  ),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      CustomText(
-                                        priceStr,
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Expanded(
+                                      child: CustomText(
+                                        product.displayName(locale),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700,
+                                        maxLines: 1,
                                       ),
-                                      CustomText(
-                                        weightStr,
-                                        fontSize: 11,
-                                        color: colors.textSecondary,
-                                      ),
-                                    ],
-                                  ),
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: _SimActionChip(
-                                          label: l10n.simulateValidScan,
-                                          color: colors.verified,
-                                          enabled: !widget.isBusy,
-                                          onTap: () => widget.onSimulateScan(
-                                            product,
-                                            isFraud: false,
-                                          ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    CustomText(
+                                      priceStr,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: colors.brand,
+                                      tabularFigures: true,
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _SimActionChip(
+                                        label: l10n.simulateValidScan,
+                                        color: colors.verified,
+                                        enabled: !widget.isBusy,
+                                        onTap: () => widget.onSimulateScan(
+                                          product,
+                                          isFraud: false,
                                         ),
                                       ),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: _SimActionChip(
-                                          label: l10n.simulateFraudScan,
-                                          color: colors.danger,
-                                          enabled: !widget.isBusy,
-                                          onTap: () => widget.onSimulateScan(
-                                            product,
-                                            isFraud: true,
-                                          ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: _SimActionChip(
+                                        label: l10n.simulateFraudScan,
+                                        color: colors.danger,
+                                        enabled: !widget.isBusy,
+                                        onTap: () => widget.onSimulateScan(
+                                          product,
+                                          isFraud: true,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    )
-                : const SizedBox(width: double.infinity),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
         ],
       ),
@@ -233,7 +230,7 @@ class _CollapseChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(9),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: colors.surfaceAlt,
             borderRadius: BorderRadius.circular(9),
@@ -244,7 +241,7 @@ class _CollapseChip extends StatelessWidget {
             children: [
               CustomText(
                 label,
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w700,
                 color: colors.textSecondary,
               ),
@@ -252,7 +249,7 @@ class _CollapseChip extends StatelessWidget {
               AnimatedRotation(
                 turns: expanded ? 0 : -0.25,
                 duration: AppTypography.base,
-                curve: AppTypography.enterCurve,
+                curve: AppTypography.springCurve,
                 child: Icon(
                   Icons.keyboard_arrow_up_rounded,
                   size: 16,
@@ -267,7 +264,7 @@ class _CollapseChip extends StatelessWidget {
   }
 }
 
-class _SimActionChip extends StatelessWidget {
+class _SimActionChip extends StatefulWidget {
   const _SimActionChip({
     required this.label,
     required this.color,
@@ -281,28 +278,53 @@ class _SimActionChip extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_SimActionChip> createState() => _SimActionChipState();
+}
+
+class _SimActionChipState extends State<_SimActionChip> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: enabled ? 0.14 : 0.06),
+    return Listener(
+      onPointerDown: (_) {
+        if (widget.enabled) setState(() => _pressed = true);
+      },
+      onPointerUp: (_) {
+        if (_pressed) setState(() => _pressed = false);
+      },
+      onPointerCancel: (_) {
+        if (_pressed) setState(() => _pressed = false);
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.95 : 1.0,
+        duration: AppTypography.fast,
+        curve: AppTypography.springCurve,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.enabled ? widget.onTap : null,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: color.withValues(alpha: enabled ? 0.45 : 0.18),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              decoration: BoxDecoration(
+                color: widget.color
+                    .withValues(alpha: widget.enabled ? 0.14 : 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.color
+                      .withValues(alpha: widget.enabled ? 0.45 : 0.18),
+                ),
+              ),
+              alignment: Alignment.center,
+              child: CustomText(
+                widget.label,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: widget.color,
+                maxLines: 1,
+              ),
             ),
-          ),
-          alignment: Alignment.center,
-          child: CustomText(
-            label,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: color,
-            maxLines: 1,
           ),
         ),
       ),

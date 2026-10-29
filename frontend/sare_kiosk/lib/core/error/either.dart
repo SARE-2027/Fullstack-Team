@@ -15,6 +15,8 @@ sealed class Either<L, R> {
 
   R? getOrNull() => fold((_) => null, (r) => r);
 
+  R? get rightOrNull => getOrNull();
+
   L? failureOrNull() => fold((l) => l, (_) => null);
 
   bool get isLeft => this is Left<L, R>;

@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/kiosk_motion.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../session/presentation/cubit/session_cubit.dart';
@@ -71,6 +72,23 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     context.go(AppRoutes.welcome);
   }
 
+  String _formatDisplayReference() {
+    final raw = widget.receiptHash.isNotEmpty
+        ? widget.receiptHash
+        : widget.sessionId;
+    if (raw.startsWith('RECEIPT_')) {
+      final parts = raw.split('_');
+      if (parts.length >= 2 && parts[1].isNotEmpty) {
+        return '#${parts[1].toUpperCase()}';
+      }
+    }
+    final cleaned = raw.replaceAll('-', '').toUpperCase();
+    if (cleaned.length > 8) {
+      return '#${cleaned.substring(0, 8)}';
+    }
+    return '#$cleaned';
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -78,6 +96,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     final qrData = widget.receiptHash.isNotEmpty
         ? widget.receiptHash
         : 'SARE:${widget.sessionId}';
+    final displayRef = _formatDisplayReference();
 
     return KioskScaffold(
       onToggleLocale: widget.onToggleLocale,
@@ -85,18 +104,19 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       isDarkMode: widget.isDarkMode,
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 660),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
             child: SingleChildScrollView(
               child: Column(
                 children: [
                   const _SuccessBurst(),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   CustomText(
                     l10n.paymentSuccess,
-                    fontSize: 24,
+                    fontSize: 25,
                     fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 4),
@@ -109,45 +129,60 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   const SizedBox(height: 8),
                   KioskPriceText(
                     minor: widget.totalMinor,
-                    amountSize: 27,
+                    amountSize: 28,
                     amountColor: colors.verified,
                   ),
                   const SizedBox(height: 14),
                   RepaintBoundary(
                     child: KioskSurfaceCard(
                       padding: const EdgeInsets.all(18),
-                      borderRadius: 18,
+                      borderRadius: 20,
+                      borderColor: colors.verified.withValues(alpha: 0.35),
                       child: Column(
                         children: [
                           _QrViewfinder(
                             cornerColor: colors.brand,
+                            accentColor: colors.verified,
                             child: QrImageView(
                               data: qrData,
                               version: QrVersions.auto,
-                              size: 172,
+                              size: 168,
                               backgroundColor: Colors.white,
                             ),
                           ),
                           const SizedBox(height: 14),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.verified_rounded,
-                                size: 16,
-                                color: colors.verified,
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.verified.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: colors.verified.withValues(alpha: 0.34),
                               ),
-                              const SizedBox(width: 6),
-                              CustomText(
-                                l10n.exitPass,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: colors.verified,
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.verified_rounded,
+                                  size: 16,
+                                  color: colors.verified,
+                                ),
+                                const SizedBox(width: 6),
+                                CustomText(
+                                  l10n.exitPass,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: colors.verified,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           CustomText(
                             l10n.receiptHint,
                             fontSize: 12,
@@ -168,19 +203,24 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                Icon(
+                                  Icons.receipt_long_rounded,
+                                  size: 14,
+                                  color: colors.brand,
+                                ),
+                                const SizedBox(width: 6),
                                 CustomText(
                                   '${l10n.receiptHashLabel}: ',
-                                  fontSize: 11,
+                                  fontSize: 11.5,
                                   color: colors.textSecondary,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 Flexible(
                                   child: CustomText(
-                                    widget.receiptHash.isEmpty
-                                        ? widget.sessionId
-                                        : widget.receiptHash,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                                    displayRef,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w800,
+                                    tabularFigures: true,
                                     maxLines: 1,
                                   ),
                                 ),
@@ -196,6 +236,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                     l10n.autoResetHint(_secondsLeft),
                     fontSize: 12,
                     color: colors.textSecondary,
+                    tabularFigures: true,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
@@ -239,24 +280,40 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   }
 }
 
-/// Frames the exit-pass QR with scanner viewfinder corners — an affordance
-/// that says "aim your camera here", painted as four rounded L-strokes.
+/// Frames the exit-pass QR with precision optical viewfinder brackets and
+/// a subtle laser alignment line.
 class _QrViewfinder extends StatelessWidget {
-  const _QrViewfinder({required this.cornerColor, required this.child});
+  const _QrViewfinder({
+    required this.cornerColor,
+    required this.accentColor,
+    required this.child,
+  });
 
   final Color cornerColor;
+  final Color accentColor;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: cornerColor.withValues(alpha: 0.18),
+            blurRadius: 24,
+            offset: const Offset(0, 6),
+            spreadRadius: -4,
+          ),
+        ],
       ),
       child: CustomPaint(
-        foregroundPainter: _ViewfinderCornersPainter(color: cornerColor),
+        foregroundPainter: _ViewfinderCornersPainter(
+          color: cornerColor,
+          accentColor: accentColor,
+        ),
         child: child,
       ),
     );
@@ -264,12 +321,16 @@ class _QrViewfinder extends StatelessWidget {
 }
 
 class _ViewfinderCornersPainter extends CustomPainter {
-  _ViewfinderCornersPainter({required this.color});
+  _ViewfinderCornersPainter({
+    required this.color,
+    required this.accentColor,
+  });
 
   final Color color;
+  final Color accentColor;
 
-  static const double _arm = 18;
-  static const double _stroke = 3;
+  static const double _arm = 20;
+  static const double _stroke = 3.2;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -294,38 +355,38 @@ class _ViewfinderCornersPainter extends CustomPainter {
     }
 
     final path = Path();
-    // Top-left, top-right, bottom-right, bottom-left.
     corner(path, rect.topLeft, 1, 1);
     corner(path, rect.topRight, -1, 1);
     corner(path, rect.bottomRight, -1, -1);
     corner(path, rect.bottomLeft, 1, -1);
     canvas.drawPath(path, paint);
 
-    // Quiet center tick marks help the eye find the code.
+    // Optical center alignment ticks
     final tick = Paint()
-      ..color = color.withValues(alpha: 0.35)
-      ..strokeWidth = 2
+      ..color = accentColor.withValues(alpha: 0.55)
+      ..strokeWidth = 2.2
       ..strokeCap = StrokeCap.round;
     final midY = rect.center.dy;
     canvas.drawLine(
-      Offset(rect.left + 4, midY),
+      Offset(rect.left + 3, midY),
       Offset(rect.left + 12, midY),
       tick,
     );
     canvas.drawLine(
       Offset(rect.right - 12, midY),
-      Offset(rect.right - 4, midY),
+      Offset(rect.right - 3, midY),
       tick,
     );
   }
 
   @override
   bool shouldRepaint(covariant _ViewfinderCornersPainter oldDelegate) =>
-      color != oldDelegate.color;
+      color != oldDelegate.color || accentColor != oldDelegate.accentColor;
 }
 
-/// One-shot success moment: the check badge scales in with a soft overshoot
-/// while an emerald ring expands and fades — the payment flow's finale.
+/// One-shot celebratory moment driven by Apple's momentum spring
+/// ([KioskMotion.springMomentum]): the check badge scales in while dual
+/// emerald rings expand and fade.
 class _SuccessBurst extends StatelessWidget {
   const _SuccessBurst();
 
@@ -334,29 +395,29 @@ class _SuccessBurst extends StatelessWidget {
     final colors = context.colors;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 700),
-      curve: Curves.easeOutBack,
+      duration: const Duration(milliseconds: 680),
+      curve: KioskMotion.springMomentum,
       builder: (context, t, child) {
+        final clamped = t.clamp(0.0, 1.0);
         return Stack(
           alignment: Alignment.center,
           children: [
-            // Expanding halo ring.
             Opacity(
-              opacity: (1 - t).clamp(0.0, 1.0),
+              opacity: (1 - clamped).clamp(0.0, 1.0),
               child: Container(
-                width: 70 + t * 60,
-                height: 70 + t * 60,
+                width: 68 + clamped * 64,
+                height: 68 + clamped * 64,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: colors.verified.withValues(alpha: 0.5),
+                    color: colors.verified.withValues(alpha: 0.48),
                     width: 2,
                   ),
                 ),
               ),
             ),
             Transform.scale(
-              scale: t.clamp(0.0, 1.0),
+              scale: clamped,
               child: child,
             ),
           ],
@@ -364,16 +425,19 @@ class _SuccessBurst extends StatelessWidget {
       },
       child: RepaintBoundary(
         child: Container(
-          width: 74,
-          height: 74,
+          width: 72,
+          height: 72,
           decoration: BoxDecoration(
-            color: colors.verified.withValues(alpha: 0.14),
+            gradient: colors.verifiedGradient,
             shape: BoxShape.circle,
-            border: Border.all(color: colors.verified.withValues(alpha: 0.4)),
+            border: Border.all(
+              color: colors.verified.withValues(alpha: 0.45),
+              width: 1.5,
+            ),
           ),
           child: Icon(
             Icons.check_circle_rounded,
-            size: 44,
+            size: 42,
             color: colors.verified,
           ),
         ),
@@ -399,8 +463,6 @@ class _CountdownBar extends StatelessWidget {
     final colors = context.colors;
     final fraction = (secondsLeft / totalSeconds).clamp(0.0, 1.0);
     return TweenAnimationBuilder<double>(
-      // Keyed on the tick only: pausing must hold the bar where it is, not
-      // replay a fill.
       key: ValueKey('countdown-$secondsLeft'),
       tween: Tween(begin: 1, end: fraction),
       duration: const Duration(seconds: 1),
@@ -418,7 +480,8 @@ class _CountdownBar extends StatelessWidget {
               widthFactor: value.clamp(0.0, 1.0),
               child: Container(
                 decoration: BoxDecoration(
-                  color: paused ? colors.textFaint : colors.brand,
+                  gradient: paused ? null : colors.brandGradient,
+                  color: paused ? colors.warning : null,
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
