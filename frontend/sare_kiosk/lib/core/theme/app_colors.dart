@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
-/// SARE "Fresh-Verify" design tokens.
+/// SARE "Precision Glass Cockpit" & "Fresh-Verify" design tokens.
 ///
-/// Royal blue is the brand — trust, checkout, primary actions. Neutral
-/// charcoal surfaces stay quiet so color carries meaning: emerald = the ±15g
-/// weight gate passed ("go"), amber = attention, red = mismatch ("stop").
-/// Green is a signal, never a decoration — it appears only on verification
-/// states and never as a fill larger than a badge.
+/// Engineered for the 10.1" (1280×800) cart-mounted touchscreen:
+/// - Deep obsidian-titanium & crisp porcelain-alabaster surfaces stay quiet so
+///   functional color signals read instantly from arm's length.
+/// - Electric cobalt (`brand`) drives primary actions, focus rings, and optical
+///   viewfinders.
+/// - Emerald (`verified`) is reserved strictly for sensor-fusion confirmation
+///   (±15g load-cell pass, verified item badges, and the exit gate pass).
+/// - Amber (`warning`) signals calibration or timer hold.
+/// - Crimson (`danger`) signals weight discrepancy (> ±15g fraud alert).
 @immutable
 class AppColorTheme extends ThemeExtension<AppColorTheme> {
   const AppColorTheme({
@@ -31,111 +35,128 @@ class AppColorTheme extends ThemeExtension<AppColorTheme> {
     required this.scrim,
   });
 
-  // ── Neutral surfaces (quiet charcoal — no color undertone) ───────────────
-  /// Card / panel background.
+  // ── Neutral surfaces (anodized obsidian / porcelain alabaster) ───────────
+  /// Primary module & panel background.
   final Color surface;
 
-  /// Inputs, nested chips, secondary panels.
+  /// Recessed input wells, secondary chips, and nested telemetry slots.
   final Color surfaceAlt;
 
-  /// Hover / pressed raised layer.
+  /// Elevated hover / pressed / floating HUD layer.
   final Color surfaceRaised;
 
-  /// Hairline separation.
+  /// Precision hairline separation.
   final Color border;
 
-  /// Emphasized outline for interactive bounds.
+  /// Emphasized instrument bezel for interactive bounds.
   final Color borderStrong;
 
-  // ── Text ─────────────────────────────────────────────────────────────────
+  // ── Text hierarchy (WCAG ≥ 4.5:1 verified across both themes) ────────────
   final Color textSecondary;
   final Color textFaint;
 
-  // ── Brand (royal blue) ───────────────────────────────────────────────────
-  /// Brand for text & icons — light enough on dark surfaces for ≥4.5:1.
+  // ── Brand (Electric Sapphire / Royal Cobalt) ─────────────────────────────
+  /// Brand accent for text & iconography — tuned for ≥ 4.5:1 contrast.
   final Color brand;
 
-  /// Brand for fills (buttons, chips) — deep enough for white text.
+  /// Deep cobalt fill for primary CTAs and active selection badges.
   final Color brandDeep;
   final Color onBrand;
   final Color brandGradientStart;
   final Color brandGradientEnd;
 
-  /// Soft glow used behind primary CTAs, focus rings and the ambient wash.
+  /// Ambient optical glow behind primary CTAs, focus rings, and cockpit wash.
   final Color brandGlow;
 
-  // ── Verification semantics ───────────────────────────────────────────────
-  /// Weight verified (±15g gate passed) — "go". Signal only, never a fill.
+  // ── Sensor-Fusion Verification Semantics ─────────────────────────────────
+  /// Load-cell weight verified (±15g gate passed) — "GO".
   final Color verified;
 
-  /// Attention — session issues, degraded hardware.
+  /// Attention — calibration hold, paused auto-reset, degraded sensor.
   final Color warning;
 
-  /// Weight mismatch / destructive — "stop".
+  /// Weight discrepancy (> ±15g fraud alert) or destructive action — "STOP".
   final Color danger;
 
-  /// Text/icon color on top of a [danger] fill (dark mode uses a light red
-  /// fill, so it needs dark text to keep ≥4.5:1 contrast).
+  /// High-contrast foreground on top of a [danger] fill.
   final Color onDanger;
 
-  /// Neutral informational accent (progress, hints).
+  /// Informational telemetry accent (scanning in progress, hints).
   final Color info;
 
-  /// Dialog / modal scrim over the scaffold.
+  /// Modal backdrop scrim with progressive depth dimming.
   final Color scrim;
 
   LinearGradient get brandGradient => LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
         colors: [brandGradientStart, brandGradientEnd],
       );
 
-  /// Dark mode palette — default for the 10.1" supermarket touchscreen.
-  /// Neutral charcoal surfaces keep the royal-blue CTAs and the green
-  /// verification signals unambiguous under bright store lighting.
+  LinearGradient get verifiedGradient => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          verified.withValues(alpha: 0.20),
+          verified.withValues(alpha: 0.06),
+        ],
+      );
+
+  LinearGradient get dangerGradient => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          danger.withValues(alpha: 0.22),
+          danger.withValues(alpha: 0.07),
+        ],
+      );
+
+  /// Dark mode palette — "Obsidian Titanium Cockpit" (default for the 10.1"
+  /// supermarket touchscreen under bright overhead store lighting).
   static const dark = AppColorTheme(
-    surface: Color(0xFF161A20),
-    surfaceAlt: Color(0xFF1D222A),
-    surfaceRaised: Color(0xFF232932),
-    border: Color(0xFF2A303A),
-    borderStrong: Color(0xFF3D4552),
-    textSecondary: Color(0xFFA6B0BC),
-    textFaint: Color(0xFF7E8898),
+    surface: Color(0xFF111620),
+    surfaceAlt: Color(0xFF171E2B),
+    surfaceRaised: Color(0xFF1F2838),
+    border: Color(0xFF253042),
+    borderStrong: Color(0xFF384761),
+    textSecondary: Color(0xFFA3B1C6),
+    textFaint: Color(0xFF7D8CA3),
     brand: Color(0xFF60A5FA),
     brandDeep: Color(0xFF2563EB),
     onBrand: Color(0xFFFFFFFF),
-    brandGradientStart: Color(0xFF2563EB),
-    brandGradientEnd: Color(0xFF2F6FF0),
-    brandGlow: Color(0x332563EB),
+    brandGradientStart: Color(0xFF3B82F6),
+    brandGradientEnd: Color(0xFF1D4ED8),
+    brandGlow: Color(0x3D2563EB),
     verified: Color(0xFF34D399),
     warning: Color(0xFFFBBF24),
     danger: Color(0xFFF87171),
-    onDanger: Color(0xFF2A0B0B),
+    onDanger: Color(0xFF280808),
     info: Color(0xFF38BDF8),
-    scrim: Color(0xB3050A10),
+    scrim: Color(0xBD04070D),
   );
 
-  /// Light mode palette — crisp porcelain daytime option.
+  /// Light mode palette — "Porcelain Alabaster Studio" (high-contrast daylight
+  /// mode with crisp machined silver borders).
   static const light = AppColorTheme(
     surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFEEF0F4),
-    surfaceRaised: Color(0xFFE5E8EE),
-    border: Color(0xFFDFE3E9),
-    borderStrong: Color(0xFFBCC4D0),
-    textSecondary: Color(0xFF566070),
-    textFaint: Color(0xFF6B7480),
+    surfaceAlt: Color(0xFFEEF2F7),
+    surfaceRaised: Color(0xFFE3E9F2),
+    border: Color(0xFFD8E0EC),
+    borderStrong: Color(0xFFB4C0D3),
+    textSecondary: Color(0xFF4A5568),
+    textFaint: Color(0xFF64748B),
     brand: Color(0xFF1D4ED8),
     brandDeep: Color(0xFF2563EB),
     onBrand: Color(0xFFFFFFFF),
-    brandGradientStart: Color(0xFF1D4ED8),
-    brandGradientEnd: Color(0xFF2563EB),
+    brandGradientStart: Color(0xFF2563EB),
+    brandGradientEnd: Color(0xFF1D4ED8),
     brandGlow: Color(0x2E1D4ED8),
     verified: Color(0xFF047857),
     warning: Color(0xFFB45309),
     danger: Color(0xFFDC2626),
     onDanger: Color(0xFFFFFFFF),
     info: Color(0xFF0369A1),
-    scrim: Color(0x6610141A),
+    scrim: Color(0x6B0B111E),
   );
 
   @override
@@ -199,8 +220,10 @@ class AppColorTheme extends ThemeExtension<AppColorTheme> {
       brand: Color.lerp(brand, other.brand, t)!,
       brandDeep: Color.lerp(brandDeep, other.brandDeep, t)!,
       onBrand: Color.lerp(onBrand, other.onBrand, t)!,
-      brandGradientStart: Color.lerp(brandGradientStart, other.brandGradientStart, t)!,
-      brandGradientEnd: Color.lerp(brandGradientEnd, other.brandGradientEnd, t)!,
+      brandGradientStart:
+          Color.lerp(brandGradientStart, other.brandGradientStart, t)!,
+      brandGradientEnd:
+          Color.lerp(brandGradientEnd, other.brandGradientEnd, t)!,
       brandGlow: Color.lerp(brandGlow, other.brandGlow, t)!,
       verified: Color.lerp(verified, other.verified, t)!,
       warning: Color.lerp(warning, other.warning, t)!,

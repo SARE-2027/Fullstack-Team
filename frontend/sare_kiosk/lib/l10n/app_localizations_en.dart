@@ -17,7 +17,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get welcomeSubtitle =>
-      'Experience frictionless checkout with SARE AI & Weight-Verification Cart';
+      'Scan your items, place them in the basket, and pay in seconds';
 
   @override
   String get startAsGuest => 'Start Shopping as Guest';
@@ -34,7 +34,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tapCardOrQr =>
-      'Tap your Membership card (NFC) on the cart handle to access your account';
+      'Tap your membership card to earn points and unlock member offers';
 
   @override
   String get cartTitle => 'Shopping Cart';
@@ -44,17 +44,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyCartMessage =>
-      'Scan an item barcode or tap a catalog item below to begin shopping';
+      'Scan any product barcode and place it in your basket to begin';
 
   @override
   String get emptyCartHint =>
-      'Place items in the basket after scanning — weight is verified within ±15g';
+      'Your items and running total update automatically as you shop';
 
   @override
-  String get itemAddedSuccess => 'Item added and verified successfully';
+  String get itemAddedSuccess => 'Added to your basket';
 
   @override
-  String get itemRemoved => 'Item removed from cart and basket weight updated';
+  String get itemRemoved => 'Item removed from your basket';
 
   @override
   String get itemRestored => 'Item restored to your cart';
@@ -69,10 +69,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get show => 'Show';
 
   @override
-  String get weightVerifying => 'Verifying item weight on load cells...';
+  String get weightVerifying => 'Adding item...';
 
   @override
-  String get weightMatchSuccess => 'Weight verified (±15g match)';
+  String get weightMatchSuccess => 'Item verified';
 
   @override
   String get weightMismatchWarning =>
@@ -84,20 +84,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get scanPrompt => 'Scan barcode with 2D scanner or enter manually';
+  String get scanPrompt => 'Scan product barcode or enter code';
 
   @override
-  String get barcodeHint => 'Barcode number (e.g. 6223000123456)';
+  String get barcodeHint => 'Scan barcode or enter product code...';
 
   @override
   String get addItem => 'Add Item';
 
   @override
-  String get verifyWeightHint =>
-      'Enter measured weight (g) or leave empty to auto-verify by catalog weight';
+  String get verifyWeightHint => '';
 
   @override
-  String get weightGramsHint => 'Weight (g)';
+  String get weightGramsHint => 'Weight';
 
   @override
   String get totalAmount => 'Total Amount';
@@ -147,8 +146,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cartOffline => 'Cart is offline or disabled';
 
   @override
-  String get scaleOfflineHelp =>
-      'Scale is offline — items can still be added by barcode confirmation';
+  String get scaleOfflineHelp => 'You can continue adding items by barcode';
 
   @override
   String get networkError => 'Network error. Check connection and retry.';
@@ -193,14 +191,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get paymentSuccessSubtitle =>
-      'Thank you for shopping with SARE Autonomous Cart';
+      'Thank you for shopping with SARE Smart Cart';
 
   @override
   String get receiptHint =>
-      'Scan this QR code with your phone camera to save your digital receipt. It also serves as your Exit Gate Pass.';
+      'Scan this QR code with your phone to save your digital receipt and exit through the gate.';
 
   @override
-  String get receiptHashLabel => 'Receipt Pass';
+  String get receiptHashLabel => 'Receipt No.';
 
   @override
   String get doneAndExit => 'Done — Return to Welcome Screen';
@@ -226,10 +224,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ok => 'OK';
 
   @override
-  String get scaleReadyLabel => 'Scale Ready';
+  String get scaleReadyLabel => 'Ready';
 
   @override
-  String get scaleOfflineLabel => 'Scale Offline';
+  String get scaleOfflineLabel => 'Barcode Mode';
 
   @override
   String get removeItemButton => 'Remove';
@@ -249,10 +247,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get nfcModalSubtitle =>
-      'Wave your store membership card near the handle NFC reader or pick a demo card below';
+      'Tap your membership card or select your account below';
 
   @override
-  String get nfcInputHint => 'Enter NFC Card UID (e.g. 04:A2:19:7C)';
+  String get nfcInputHint => 'Enter membership card code...';
 
   @override
   String get nfcConnectButton => 'Sign In with NFC';
@@ -266,20 +264,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get liveScaleTitle => 'Basket Load-Cell Telemetry';
+  String get liveScaleTitle => 'All items verified';
 
   @override
-  String get autoTareBadge => 'Auto-Tare: 0g';
+  String get autoTareBadge => 'Ready';
 
   @override
-  String get toleranceBadge => '±15g Gate';
+  String get toleranceBadge => 'Verified';
 
   @override
-  String get simulatorTitle => 'Smart Sensor & Catalog Simulator';
+  String get simulatorTitle => 'Quick Products (Demo Catalog)';
 
   @override
-  String get simulatorSubtitle =>
-      'Tap any supermarket product to simulate barcode scan + load-cell weight verification';
+  String get simulatorSubtitle => 'Tap any product to add it to your basket';
 
   @override
   String get simulateValidScan => '+ Scan (Match)';
@@ -309,10 +306,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get orderItemsHeading => 'Verified Basket Items';
+  String get orderItemsHeading => 'Your Basket Items';
 
   @override
-  String get totalBasketWeight => 'Total Verified Weight';
+  String get totalBasketWeight => 'Total Weight';
 
   @override
   String get pauseTimer => 'Hold Screen';

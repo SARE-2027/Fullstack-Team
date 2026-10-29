@@ -6,12 +6,12 @@ import 'custom_text.dart';
 
 enum KioskButtonVariant { primary, secondary, outlined, danger }
 
-/// Large, tactile button optimized for 10.1" supermarket touchscreen kiosks.
+/// Tactile cockpit button engineered for the 10.1" supermarket touchscreen.
 ///
-/// The primary variant carries the brand emerald gradient with a soft glow —
-/// it is the single element on any screen allowed to shout. Press feedback is
-/// a quick sponge scale; loading swaps the icon slot for a spinner without
-/// shifting the layout.
+/// Follows Apple's *Designing Fluid Interfaces* response law:
+/// - Instant `<16ms` highlight and scale down (`0.965`) on `onPointerDown`.
+/// - Snappy spring release (`AppTypography.springCurve`) on pointer up.
+/// - Top specular rim light that reads as physical hardware lit from above.
 class KioskButton extends StatefulWidget {
   const KioskButton({
     super.key,
@@ -20,7 +20,7 @@ class KioskButton extends StatefulWidget {
     this.icon,
     this.variant = KioskButtonVariant.primary,
     this.isLoading = false,
-    this.height = 56.0,
+    this.height = 54.0,
     this.width,
     this.borderRadius = 14.0,
   });
@@ -40,18 +40,18 @@ class KioskButton extends StatefulWidget {
 
 class _KioskButtonState extends State<KioskButton> {
   bool _pressed = false;
+  bool _hovered = false;
 
   bool get _enabled => widget.onPressed != null && !widget.isLoading;
 
-  /// Top-sheen strength per variant — strongest on the filled CTAs.
   double get _sheenAlpha {
     switch (widget.variant) {
       case KioskButtonVariant.primary:
-        return 0.16;
+        return _pressed ? 0.08 : 0.18;
       case KioskButtonVariant.danger:
-        return 0.14;
+        return _pressed ? 0.06 : 0.15;
       case KioskButtonVariant.secondary:
-        return 0.05;
+        return 0.06;
       case KioskButtonVariant.outlined:
         return 0.0;
     }
@@ -69,14 +69,19 @@ class _KioskButtonState extends State<KioskButton> {
 
     switch (widget.variant) {
       case KioskButtonVariant.primary:
-        background = colors.brand;
+        background = colors.brandDeep;
         foreground = colors.onBrand;
-        borderSide = null;
+        borderSide = BorderSide(
+          color: Colors.white.withValues(alpha: 0.18),
+          width: 1.0,
+        );
         gradient = colors.brandGradient;
       case KioskButtonVariant.secondary:
-        background = colors.surfaceAlt;
+        background = _hovered ? colors.surfaceRaised : colors.surfaceAlt;
         foreground = theme.colorScheme.onSurface;
-        borderSide = BorderSide(color: colors.borderStrong);
+        borderSide = BorderSide(
+          color: _hovered ? colors.brand.withValues(alpha: 0.45) : colors.borderStrong,
+        );
         gradient = null;
       case KioskButtonVariant.outlined:
         background = Colors.transparent;
@@ -94,9 +99,9 @@ class _KioskButtonState extends State<KioskButton> {
         ? [
             BoxShadow(
               color: colors.brandGlow,
-              blurRadius: 20,
+              blurRadius: _hovered ? 24 : 18,
               offset: const Offset(0, 6),
-              spreadRadius: -4,
+              spreadRadius: -3,
             ),
           ]
         : <BoxShadow>[];
@@ -107,19 +112,19 @@ class _KioskButtonState extends State<KioskButton> {
       children: [
         if (widget.isLoading) ...[
           SizedBox(
-            width: 22,
-            height: 22,
+            width: 20,
+            height: 20,
             child: CircularProgressIndicator(
-              strokeWidth: 2.5,
+              strokeWidth: 2.4,
               strokeCap: StrokeCap.round,
               valueColor: AlwaysStoppedAnimation<Color>(foreground),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
         ] else if (widget.icon != null) ...[
           AnimatedSwitcher(
             duration: AppTypography.base,
-            switchInCurve: AppTypography.enterCurve,
+            switchInCurve: AppTypography.springCurve,
             switchOutCurve: AppTypography.exitCurve,
             transitionBuilder: (child, animation) => ScaleTransition(
               scale: animation,
@@ -128,11 +133,11 @@ class _KioskButtonState extends State<KioskButton> {
             child: Icon(
               widget.icon,
               key: ValueKey(widget.icon),
-              size: 22,
+              size: 20,
               color: foreground,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 9),
         ],
         Flexible(
           child: FittedBox(
@@ -146,7 +151,7 @@ class _KioskButtonState extends State<KioskButton> {
               child: CustomText(
                 widget.text,
                 key: ValueKey(widget.text),
-                fontSize: 16,
+                fontSize: 15.5,
                 fontWeight: FontWeight.w700,
                 color: foreground,
                 maxLines: 1,
@@ -161,14 +166,16 @@ class _KioskButtonState extends State<KioskButton> {
       ignoring: !_enabled,
       child: MouseRegion(
         cursor: _enabled ? SystemMouseCursors.click : MouseCursor.defer,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
         child: Listener(
           onPointerDown: (_) => setState(() => _pressed = true),
           onPointerUp: (_) => setState(() => _pressed = false),
           onPointerCancel: (_) => setState(() => _pressed = false),
           child: AnimatedScale(
-            scale: _pressed ? 0.97 : 1.0,
-            duration: AppTypography.fast,
-            curve: AppTypography.enterCurve,
+            scale: _pressed ? 0.965 : (_hovered && _enabled ? 1.01 : 1.0),
+            duration: _pressed ? AppTypography.fast : AppTypography.base,
+            curve: _pressed ? Curves.easeOut : AppTypography.springCurve,
             child: AnimatedContainer(
               duration: AppTypography.base,
               curve: AppTypography.enterCurve,
@@ -179,10 +186,8 @@ class _KioskButtonState extends State<KioskButton> {
                 border: Border.fromBorderSide(
                   borderSide ?? BorderSide.none,
                 ),
-                boxShadow: _pressed ? [] : glow,
+                boxShadow: _pressed ? const [] : glow,
               ),
-              // Rim light: a faint top sheen that makes the button read as
-              // physical hardware lit from above.
               foregroundDecoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(widget.borderRadius),
                 gradient: LinearGradient(
@@ -196,7 +201,7 @@ class _KioskButtonState extends State<KioskButton> {
               ),
               child: AnimatedOpacity(
                 duration: AppTypography.base,
-                opacity: _enabled ? 1 : 0.55,
+                opacity: _enabled ? 1.0 : 0.50,
                 child: SizedBox(
                   height: widget.height,
                   width: widget.width,
@@ -211,11 +216,12 @@ class _KioskButtonState extends State<KioskButton> {
                       disabledForegroundColor: foreground,
                       overlayColor: Colors.white.withValues(alpha: 0.10),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                        horizontal: 20,
+                        vertical: 10,
                       ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(widget.borderRadius),
+                        borderRadius:
+                            BorderRadius.circular(widget.borderRadius),
                       ),
                     ),
                     child: content,

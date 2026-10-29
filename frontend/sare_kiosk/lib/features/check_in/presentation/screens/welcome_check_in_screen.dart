@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/config/kiosk_config_exports.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/kiosk_motion.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -30,7 +31,7 @@ class WelcomeCheckInScreen extends StatefulWidget {
 
 class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
     with SingleTickerProviderStateMixin {
-  static const Duration _entrance = Duration(milliseconds: 1100);
+  static const Duration _entrance = Duration(milliseconds: 980);
 
   bool _starting = false;
   String? _localError;
@@ -48,16 +49,16 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
     super.dispose();
   }
 
-  /// One-shot staggered entrance: fade + rise, each element entering on its
-  /// own interval of the shared controller.
+  /// One-shot staggered entrance with Apple spring curve.
   Widget _entranceSlot(Interval interval, {required Widget child}) {
+    final curved = CurvedAnimation(parent: _intro, curve: interval);
     return FadeTransition(
-      opacity: CurvedAnimation(parent: _intro, curve: interval),
+      opacity: curved,
       child: SlideTransition(
         position: Tween<Offset>(
-          begin: const Offset(0, 0.35),
+          begin: const Offset(0, 0.28),
           end: Offset.zero,
-        ).animate(CurvedAnimation(parent: _intro, curve: interval)),
+        ).animate(curved),
         child: child,
       ),
     );
@@ -75,7 +76,8 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
     if (!mounted) return;
     setState(() => _starting = false);
     if (!ok) {
-      final msg = cubit.state.error ?? AppLocalizations.of(context)!.sessionFailed;
+      final msg =
+          cubit.state.error ?? AppLocalizations.of(context)!.sessionFailed;
       setState(() => _localError = msg);
       return;
     }
@@ -96,7 +98,8 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
     if (!mounted) return;
     setState(() => _starting = false);
     if (!ok) {
-      final msg = cubit.state.error ?? AppLocalizations.of(context)!.sessionFailed;
+      final msg =
+          cubit.state.error ?? AppLocalizations.of(context)!.sessionFailed;
       setState(() => _localError = msg);
       return;
     }
@@ -141,70 +144,94 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 32,
-                        vertical: 16,
+                        vertical: 14,
                       ),
                       child: Column(
                         children: [
                           const Spacer(flex: 2),
                           _entranceSlot(
-                            const Interval(0.0, 0.45, curve: Curves.easeOutCubic),
+                            const Interval(
+                              0.0,
+                              0.45,
+                              curve: KioskMotion.springCritical,
+                            ),
                             child: RepaintBoundary(
                               child: KioskBrandMark(
-                                size: 150,
+                                size: 142,
                                 animate: KioskMotion.ambientEnabled(context),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 26),
+                          const SizedBox(height: 20),
                           _entranceSlot(
-                            const Interval(0.12, 0.55, curve: Curves.easeOutCubic),
+                            const Interval(
+                              0.10,
+                              0.55,
+                              curve: KioskMotion.springCritical,
+                            ),
                             child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
+                              duration: AppTypography.base,
                               transitionBuilder: (child, animation) =>
-                                  FadeTransition(opacity: animation, child: child),
+                                  FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
                               child: CustomText(
                                 l10n.appName,
                                 key: ValueKey(l10n.appName),
                                 fontSize: 36,
                                 fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
+                                letterSpacing: -0.7,
                                 textAlign: TextAlign.center,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 6),
                           _entranceSlot(
-                            const Interval(0.2, 0.62, curve: Curves.easeOutCubic),
+                            const Interval(
+                              0.18,
+                              0.62,
+                              curve: KioskMotion.springCritical,
+                            ),
                             child: AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
+                              duration: AppTypography.base,
                               transitionBuilder: (child, animation) =>
-                                  FadeTransition(opacity: animation, child: child),
+                                  FadeTransition(
+                                opacity: animation,
+                                child: child,
+                              ),
                               child: CustomText(
                                 l10n.welcomeSubtitle,
                                 key: ValueKey(l10n.welcomeSubtitle),
-                                fontSize: 16,
+                                fontSize: 15.5,
                                 color: colors.textSecondary,
                                 textAlign: TextAlign.center,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 36),
+                          const SizedBox(height: 28),
                           _entranceSlot(
-                            const Interval(0.3, 0.75, curve: Curves.easeOutCubic),
+                            const Interval(
+                              0.26,
+                              0.78,
+                              curve: KioskMotion.springCritical,
+                            ),
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                maxWidth:
-                                    (constraints.maxWidth * 0.74).clamp(720.0, 880.0),
+                                maxWidth: (constraints.maxWidth * 0.76)
+                                    .clamp(720.0, 900.0),
                               ),
                               child: IntrinsicHeight(
                                 child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       child: KioskActionCard(
                                         title: l10n.startAsGuest,
-                                        description: l10n.startAsGuestDescription,
-                                        icon: Icons.bolt_rounded,
+                                        description:
+                                            l10n.startAsGuestDescription,
+                                        icon: Icons.shopping_bag_outlined,
                                         isPrimary: true,
                                         actionButton: KioskButton(
                                           text: _starting
@@ -228,10 +255,12 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
                                         actionButton: KioskButton(
                                           text: l10n.loyaltySignIn,
                                           height: 52,
-                                          variant: KioskButtonVariant.secondary,
+                                          variant:
+                                              KioskButtonVariant.secondary,
                                           icon: Icons.contactless_rounded,
-                                          onPressed:
-                                              _starting ? null : _showNfcSignInModal,
+                                          onPressed: _starting
+                                              ? null
+                                              : _showNfcSignInModal,
                                         ),
                                       ),
                                     ),
@@ -253,7 +282,8 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
                                   color: colors.danger.withValues(alpha: 0.10),
                                   borderRadius: BorderRadius.circular(10),
                                   border: Border.all(
-                                    color: colors.danger.withValues(alpha: 0.35),
+                                    color:
+                                        colors.danger.withValues(alpha: 0.35),
                                   ),
                                 ),
                                 child: Row(
@@ -331,6 +361,7 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.colors;
     final locale = Localizations.localeOf(context).languageCode;
+    final ptsSuffix = locale == 'ar' ? 'نقطة مكافآت' : 'reward pts';
 
     return Dialog(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -339,7 +370,7 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
         side: BorderSide(color: colors.borderStrong, width: 1.4),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 540),
+        constraints: const BoxConstraints(maxWidth: 520),
         child: Padding(
           padding: const EdgeInsets.all(26),
           child: SingleChildScrollView(
@@ -352,19 +383,24 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                     Container(
                       padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
-                        color: colors.brand.withValues(alpha: 0.12),
+                        gradient: colors.brandGradient,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: colors.brand.withValues(alpha: 0.35),
-                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.brandGlow,
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                            spreadRadius: -2,
+                          ),
+                        ],
                       ),
                       child: Icon(
                         Icons.contactless_rounded,
                         size: 26,
-                        color: colors.brand,
+                        color: colors.onBrand,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -372,7 +408,7 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                           CustomText(
                             l10n.nfcModalTitle,
                             fontSize: 19,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                           ),
                           const SizedBox(height: 2),
                           CustomText(
@@ -385,7 +421,10 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close_rounded, color: colors.textSecondary),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        color: colors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -413,11 +452,14 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                               Container(
                                 padding: const EdgeInsets.all(9),
                                 decoration: BoxDecoration(
-                                  color: colors.brand.withValues(alpha: 0.10),
+                                  color: colors.brand.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(11),
+                                  border: Border.all(
+                                    color: colors.brand.withValues(alpha: 0.25),
+                                  ),
                                 ),
                                 child: Icon(
-                                  Icons.credit_card_rounded,
+                                  Icons.workspace_premium_rounded,
                                   size: 19,
                                   color: colors.brand,
                                 ),
@@ -434,17 +476,29 @@ class _NfcMemberSignInDialogState extends State<_NfcMemberSignInDialog> {
                                     ),
                                     const SizedBox(height: 2),
                                     CustomText(
-                                      '${member.displayTier(locale)} • UID: ${member.nfcUid}',
+                                      '${member.displayTier(locale)} • ${member.points} $ptsSuffix',
                                       fontSize: 12,
                                       color: colors.textSecondary,
+                                      tabularFigures: true,
                                     ),
                                   ],
                                 ),
                               ),
-                              Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 15,
-                                color: colors.textFaint,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      colors.verified.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: Icon(
+                                  Icons.arrow_forward_ios_rounded,
+                                  size: 13,
+                                  color: colors.verified,
+                                ),
                               ),
                             ],
                           ),

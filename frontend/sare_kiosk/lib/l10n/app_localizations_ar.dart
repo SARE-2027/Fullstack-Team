@@ -17,14 +17,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get welcomeSubtitle =>
-      'تسوق بسلاسة وسرعة مع عربة SARE المدعومة بالذكاء الاصطناعي والميزان الحساس';
+      'امسح منتجاتك وضعها في السلة، وادفع في ثوانٍ بدون انتظار';
 
   @override
   String get startAsGuest => 'ابدأ التسوق كزائر / ضيف';
 
   @override
   String get startAsGuestDescription =>
-      'بدون أي تسجيل مسبق. تسوق وادفع وغادر في أي وقت.';
+      'تسوق فورًا بدون تسجيل مسبق وادفع بكل سهولة.';
 
   @override
   String get orDivider => 'أو';
@@ -34,7 +34,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get tapCardOrQr =>
-      'مرر بطاقة العضوية (NFC) على مقبض العربة للتعرف على حسابك فورًا';
+      'مرر بطاقة العضوية للاستفادة من نقاطك وعروضك الخاصة';
 
   @override
   String get cartTitle => 'سلة المشتريات';
@@ -44,17 +44,17 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get emptyCartMessage =>
-      'امسح باركود المنتج أو اختر صنفًا من المحاكي أدناه لتبدأ التسوق';
+      'امسح باركود أي منتج وضعه في السلة ليظهر هنا فورًا';
 
   @override
   String get emptyCartHint =>
-      'ضع المنتج داخل السلة بعد المسح — يتم التحقق من الوزن بدقة ±15 جم';
+      'يتم تحديث قائمة مشترياتك وإجمالي الفاتورة تلقائيًّا';
 
   @override
-  String get itemAddedSuccess => 'تمت إضافة المنتج ومطابقة الوزن بنجاح';
+  String get itemAddedSuccess => 'تمت إضافة المنتج إلى سلتك';
 
   @override
-  String get itemRemoved => 'تم حذف المنتج وتحديث وزن السلة';
+  String get itemRemoved => 'تم حذف المنتج من السلة';
 
   @override
   String get itemRestored => 'تمت إعادة المنتج إلى سلتك';
@@ -69,35 +69,34 @@ class AppLocalizationsAr extends AppLocalizations {
   String get show => 'عرض';
 
   @override
-  String get weightVerifying => 'جارٍ التحقق من وزن السلعة...';
+  String get weightVerifying => 'جارٍ إضافة المنتج...';
 
   @override
-  String get weightMatchSuccess => 'تمت مطابقة الوزن بدقة (±15 جم)';
+  String get weightMatchSuccess => 'تم تأكيد المنتج';
 
   @override
   String get weightMismatchWarning =>
-      'تم رصد اختلاف في الوزن! يرجى مراجعة آخر منتج وُضع في السلة.';
+      'يرجى مراجعة آخر منتج وُضع في السلة وإعادة مسحه.';
 
   @override
   String weightMismatchDetail(String expected, String measured) {
-    return 'المتوقع $expected بينما المقاس $measured — لم تتم الإضافة';
+    return 'المنتج غير مطابق — لم تتم الإضافة';
   }
 
   @override
-  String get scanPrompt => 'امسح باركود السلعة أمام الماسح أو أدخله يدويًّا';
+  String get scanPrompt => 'امسح باركود المنتج أو أدخل رقمه';
 
   @override
-  String get barcodeHint => 'رقم الباركود (مثال: 6223000123456)';
+  String get barcodeHint => 'امسح الباركود أو اكتب رقم المنتج...';
 
   @override
   String get addItem => 'إضافة المنتج';
 
   @override
-  String get verifyWeightHint =>
-      'أدخل الوزن المقاس (جم) أو اتركه فارغًا للمطابقة التلقائية من الكتالوج';
+  String get verifyWeightHint => '';
 
   @override
-  String get weightGramsHint => 'الوزن (جم)';
+  String get weightGramsHint => 'الوزن';
 
   @override
   String get totalAmount => 'الإجمالي الكلي';
@@ -147,8 +146,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cartOffline => 'العربة غير متاحة حاليًّا';
 
   @override
-  String get scaleOfflineHelp =>
-      'الميزان غير متصل — يمكن إضافة المنتجات بتأكيد الباركود';
+  String get scaleOfflineHelp => 'يمكنك متابعة إضافة المنتجات بالباركود';
 
   @override
   String get networkError => 'خطأ في الشبكة. تحقق من الاتصال وحاول مجددًا.';
@@ -196,10 +194,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get receiptHint =>
-      'امسح هذا الرمز بكاميرا هاتفك لعرض الفاتورة الرقمية وحفظها، كما يمثل تصريح الخروج الذكي من البوابة.';
+      'امسح الرمز بهاتفك لحفظ الفاتورة الرقمية والمرور من البوابة.';
 
   @override
-  String get receiptHashLabel => 'تصريح الفاتورة';
+  String get receiptHashLabel => 'رقم الفاتورة';
 
   @override
   String get doneAndExit => 'تم — العودة لشاشة الترحيب';
@@ -225,10 +223,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get ok => 'حسنًا';
 
   @override
-  String get scaleReadyLabel => 'الميزان متصل';
+  String get scaleReadyLabel => 'جاهزة للتسوق';
 
   @override
-  String get scaleOfflineLabel => 'الميزان غير متصل';
+  String get scaleOfflineLabel => 'وضع الباركود';
 
   @override
   String get removeItemButton => 'حذف';
@@ -247,11 +245,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get nfcModalTitle => 'تسجيل دخول الأعضاء (NFC)';
 
   @override
-  String get nfcModalSubtitle =>
-      'مرر بطاقة عضويتك على مقبض العربة أو اختر بطاقة عضوية تجريبية أدناه';
+  String get nfcModalSubtitle => 'مرر بطاقة عضويتك أو اختر حسابك للبدء فورًا';
 
   @override
-  String get nfcInputHint => 'أدخل معرف بطاقة NFC (مثال: 04:A2:19:7C)';
+  String get nfcInputHint => 'أدخل رقم بطاقة العضوية...';
 
   @override
   String get nfcConnectButton => 'دخول بالبطاقة';
@@ -265,20 +262,19 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get liveScaleTitle => 'قراءة ميزان السلة الحساس';
+  String get liveScaleTitle => 'جميع المنتجات مؤكدة';
 
   @override
-  String get autoTareBadge => 'تصفير تلقائي: 0 جم';
+  String get autoTareBadge => 'جاهز';
 
   @override
-  String get toleranceBadge => 'دقة ±15 جم';
+  String get toleranceBadge => 'مؤكد';
 
   @override
-  String get simulatorTitle => 'محاكي الحساسات وكتالوج السوبرماركت';
+  String get simulatorTitle => 'المنتجات السريعة (وضع التجربة)';
 
   @override
-  String get simulatorSubtitle =>
-      'اضغط على أي منتج لمحاكاة مسح الباركود والتحقق الفوري من الوزن';
+  String get simulatorSubtitle => 'اضغط لإضافة المنتج مباشرة إلى السلة';
 
   @override
   String get simulateValidScan => '+ مسح (مطابق)';
@@ -296,11 +292,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get paymentMethodInstructionCard =>
-      'مرر بطاقة فيزا أو ماستركارد أو ميزة على قارئ الدفع اللاتلامسي بجانب الشاشة.';
+      'مرر بطاقتك البنكية على قارئ الدفع اللاتلامسي بجانب الشاشة.';
 
   @override
   String get paymentMethodInstructionWallet =>
-      'امسح رمز الدفع الديناميكي عبر تطبيق إنستا باي أو محفظتك البنكية لإتمام السداد.';
+      'امسح رمز الدفع عبر تطبيق إنستا باي أو محفظتك البنكية لإتمام السداد.';
 
   @override
   String paymentMethodInstructionCashier(String cartNumber) {
@@ -308,10 +304,10 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get orderItemsHeading => 'الأصناف المؤكدة في السلة';
+  String get orderItemsHeading => 'مشترياتك في السلة';
 
   @override
-  String get totalBasketWeight => 'إجمالي الوزن المطابق';
+  String get totalBasketWeight => 'إجمالي الوزن';
 
   @override
   String get pauseTimer => 'تثبيت الشاشة';

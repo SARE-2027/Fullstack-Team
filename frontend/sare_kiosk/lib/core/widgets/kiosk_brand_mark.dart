@@ -1,20 +1,17 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// The SARE brand mark: the cart glyph on a gradient squircle, framed by a
-/// quiet instrument ring that breathes — a slow opacity pulse, Apple-style.
+/// Serene, Apple-inspired SARE Brand Mark:
+/// A soft breathing optical halo framing a depth-lit sapphire squircle with
+/// specular top rim lighting.
 ///
-/// Deliberately opacity-only: no rotation, no per-frame shaders, nothing that
-/// can stutter or jitter. The animated halo lives inside its own
-/// [RepaintBoundary] so the pulse repaints nothing else. Pass `animate:
-/// false` (tests / reduced motion) to render the calm static composition.
+/// The breathing halo is isolated inside its own [RepaintBoundary] so 120 FPS
+/// frame budgets (<8.3ms) are never impacted.
 class KioskBrandMark extends StatefulWidget {
   const KioskBrandMark({
     super.key,
-    this.size = 150,
+    this.size = 136,
     this.animate = true,
   });
 
@@ -34,7 +31,7 @@ class _KioskBrandMarkState extends State<KioskBrandMark>
     super.initState();
     _breath = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3400),
+      duration: const Duration(milliseconds: 3200),
     );
     if (widget.animate) {
       _breath.repeat(reverse: true);
@@ -63,7 +60,7 @@ class _KioskBrandMarkState extends State<KioskBrandMark>
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final markSize = widget.size * 0.56;
+    final markSize = widget.size * 0.58;
 
     return RepaintBoundary(
       child: SizedBox(
@@ -72,56 +69,74 @@ class _KioskBrandMarkState extends State<KioskBrandMark>
         child: Stack(
           alignment: Alignment.center,
           children: [
-            // Static instrument ring: hairline circle with four tick marks.
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _InstrumentRingPainter(
-                  ring: colors.borderStrong,
-                  tick: colors.textFaint,
+            // Soft outer glass ring
+            Container(
+              width: widget.size - 8,
+              height: widget.size - 8,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: colors.border.withValues(alpha: 0.75),
+                  width: 1.0,
                 ),
               ),
             ),
-            // Breathing halo — the only moving part, opacity alone.
+            // Breathing optical halo — isolated inside its own layer
             RepaintBoundary(
               child: AnimatedBuilder(
                 animation: _breath,
                 builder: (context, _) {
                   final t = Curves.easeInOut.transform(_breath.value);
                   return Container(
-                    width: markSize + 26,
-                    height: markSize + 26,
+                    width: markSize + 24,
+                    height: markSize + 24,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
+                      color: colors.brand.withValues(alpha: 0.04 + (t * 0.05)),
                       border: Border.all(
-                        color: colors.brand
-                            .withValues(alpha: 0.08 + (t * 0.24)),
-                        width: 1.5,
+                        color: colors.brand.withValues(alpha: 0.14 + (t * 0.22)),
+                        width: 1.2,
                       ),
                     ),
                   );
                 },
               ),
             ),
-            // Center mark: gradient squircle, cart glyph, soft glow.
+            // Center mark: depth-lit sapphire squircle with specular top rim
             Container(
               width: markSize,
               height: markSize,
               decoration: BoxDecoration(
                 gradient: colors.brandGradient,
-                borderRadius: BorderRadius.circular(markSize * 0.34),
+                borderRadius: BorderRadius.circular(markSize * 0.30),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.24),
+                  width: 1.2,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: colors.brandGlow,
-                    blurRadius: 30,
+                    blurRadius: 28,
                     offset: const Offset(0, 10),
                     spreadRadius: -4,
                   ),
                 ],
               ),
+              foregroundDecoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(markSize * 0.30),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: const Alignment(0, 0.35),
+                  colors: [
+                    Colors.white.withValues(alpha: 0.24),
+                    Colors.white.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
               child: Center(
                 child: Icon(
-                  Icons.shopping_cart_checkout_rounded,
-                  size: markSize * 0.5,
+                  Icons.shopping_bag_rounded,
+                  size: markSize * 0.46,
                   color: colors.onBrand,
                 ),
               ),
@@ -131,47 +146,4 @@ class _KioskBrandMarkState extends State<KioskBrandMark>
       ),
     );
   }
-}
-
-/// Static frame around the mark — painted once, never repainted.
-class _InstrumentRingPainter extends CustomPainter {
-  _InstrumentRingPainter({required this.ring, required this.tick});
-
-  final Color ring;
-  final Color tick;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide / 2 - 2;
-
-    final ringPaint = Paint()
-      ..color = ring
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-    canvas.drawCircle(center, radius, ringPaint);
-
-    // Four quiet tick marks at the cardinal points.
-    final tickPaint = Paint()
-      ..color = tick
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 4; i++) {
-      final angle = i * math.pi / 2;
-      final outer = Offset(
-        center.dx + math.cos(angle) * radius,
-        center.dy + math.sin(angle) * radius,
-      );
-      final inner = Offset(
-        center.dx + math.cos(angle) * (radius - 5),
-        center.dy + math.sin(angle) * (radius - 5),
-      );
-      canvas.drawLine(inner, outer, tickPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _InstrumentRingPainter oldDelegate) =>
-      ring != oldDelegate.ring || tick != oldDelegate.tick;
 }

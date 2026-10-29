@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../utils/money.dart';
 import 'custom_text.dart';
 
-/// Receipt-grade price: large tabular-feeling amount with a smaller, lighter
-/// currency marker sitting raised beside it — the classic premium-invoice
-/// treatment.
+/// Receipt-grade kinetic price readout: tabular odometer numerals with a
+/// raised currency marker that rolls smoothly with spring physics whenever
+/// the basket total changes.
 class KioskPriceText extends StatelessWidget {
   const KioskPriceText({
     super.key,
@@ -39,12 +40,31 @@ class KioskPriceText extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        CustomText(
-          parts.amount,
-          fontSize: amountSize,
-          fontWeight: amountWeight,
-          color: amountColor,
-          letterSpacing: -0.3,
+        AnimatedSwitcher(
+          duration: AppTypography.base,
+          switchInCurve: AppTypography.enterCurve,
+          switchOutCurve: AppTypography.exitCurve,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.22),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: CustomText(
+            parts.amount,
+            key: ValueKey<String>('price-${parts.amount}'),
+            fontSize: amountSize,
+            fontWeight: amountWeight,
+            color: amountColor,
+            letterSpacing: -0.4,
+            tabularFigures: true,
+          ),
         ),
         const SizedBox(width: 4),
         Padding(
@@ -52,7 +72,7 @@ class KioskPriceText extends StatelessWidget {
           child: CustomText(
             parts.symbol,
             fontSize: (amountSize * 0.52).clamp(10, 15),
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
             color: symbolColor ?? colors.textSecondary,
           ),
         ),

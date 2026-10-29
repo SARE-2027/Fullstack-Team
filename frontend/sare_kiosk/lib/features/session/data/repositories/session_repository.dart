@@ -43,22 +43,35 @@ class SessionRepository {
         }
       }
 
-      // 2. If cart already has an active session on backend (409 Conflict), resume it seamlessly
+      // 2. If cart already has an active session on backend (409 Conflict),
+      // close stale session if it has leftover items or mismatched member, then start fresh; otherwise resume.
       if (e.statusCode == 409) {
         final active = await getActiveByCart(cartId);
-        if (active.isRight) return active;
+        if (active.isRight) {
+          final existing = active.rightOrNull!;
+          final memberMismatch = (nfcUid != null && nfcUid.trim().isNotEmpty) != existing.isMember;
+          if (existing.items.isNotEmpty || memberMismatch) {
+            await closeSession(existing.sessionId, reason: 'abandoned');
+            try {
+              return await _tryStartRemoteSession(cartId: cartId, nfcUid: nfcUid);
+            } on Exception catch (_) {}
+          }
+          return Right(_enrichMemberIfNeeded(existing, nfcUid));
+        }
         if (altCartId != cartId) {
           final altActive = await getActiveByCart(altCartId);
-          if (altActive.isRight) return altActive;
+          if (altActive.isRight) {
+            return Right(_enrichMemberIfNeeded(altActive.rightOrNull!, nfcUid));
+          }
         }
       }
 
       // 3. Fallback to legacy endpoint or offline engine when appropriate
-      if (e.statusCode == 404) {
+      if (e.statusCode == 404 && (nfcUid == null || nfcUid.trim().isEmpty)) {
         try {
           final legacy = await _api.post('/api/cart/session/start', body: {'cartId': cartId, 'userId': null});
           if (legacy != null) {
-            final summary = SessionSummary.fromJson(legacy);
+            final summary = _enrichMemberIfNeeded(SessionSummary.fromJson(legacy), nfcUid);
             _localEngine.cacheSession(summary);
             return Right(summary);
           }
@@ -78,6 +91,20 @@ class SessionRepository {
     }
   }
 
+  SessionSummary _enrichMemberIfNeeded(SessionSummary summary, String? nfcUid) {
+    if (nfcUid == null || nfcUid.trim().isEmpty) return summary;
+    final member = LocalSmartCartEngine.resolveMember(nfcUid);
+    final enriched = summary.copyWith(
+      userId: summary.userId ?? member.userId,
+      userName: (summary.userName == null || summary.userName!.isEmpty)
+          ? member.nameEn
+          : summary.userName,
+      nfcUid: summary.nfcUid ?? member.nfcUid,
+    );
+    _localEngine.cacheSession(enriched);
+    return enriched;
+  }
+
   Future<Result<SessionSummary>> _tryStartRemoteSession({
     required String cartId,
     String? nfcUid,
@@ -88,7 +115,7 @@ class SessionRepository {
     };
     final json = await _api.post('/api/sessions', body: body);
     if (json == null) throw const ServerException('Empty response from server');
-    final summary = SessionSummary.fromJson(json);
+    final summary = _enrichMemberIfNeeded(SessionSummary.fromJson(json), nfcUid);
     _localEngine.cacheSession(summary);
     return Right(summary);
   }

@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @welcomeSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Experience frictionless checkout with SARE AI & Weight-Verification Cart'**
+  /// **'Scan your items, place them in the basket, and pay in seconds'**
   String get welcomeSubtitle;
 
   /// No description provided for @startAsGuest.
@@ -143,7 +143,7 @@ abstract class AppLocalizations {
   /// No description provided for @tapCardOrQr.
   ///
   /// In en, this message translates to:
-  /// **'Tap your Membership card (NFC) on the cart handle to access your account'**
+  /// **'Tap your membership card to earn points and unlock member offers'**
   String get tapCardOrQr;
 
   /// No description provided for @cartTitle.
@@ -161,25 +161,25 @@ abstract class AppLocalizations {
   /// No description provided for @emptyCartMessage.
   ///
   /// In en, this message translates to:
-  /// **'Scan an item barcode or tap a catalog item below to begin shopping'**
+  /// **'Scan any product barcode and place it in your basket to begin'**
   String get emptyCartMessage;
 
   /// No description provided for @emptyCartHint.
   ///
   /// In en, this message translates to:
-  /// **'Place items in the basket after scanning — weight is verified within ±15g'**
+  /// **'Your items and running total update automatically as you shop'**
   String get emptyCartHint;
 
   /// No description provided for @itemAddedSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Item added and verified successfully'**
+  /// **'Added to your basket'**
   String get itemAddedSuccess;
 
   /// No description provided for @itemRemoved.
   ///
   /// In en, this message translates to:
-  /// **'Item removed from cart and basket weight updated'**
+  /// **'Item removed from your basket'**
   String get itemRemoved;
 
   /// No description provided for @itemRestored.
@@ -209,13 +209,13 @@ abstract class AppLocalizations {
   /// No description provided for @weightVerifying.
   ///
   /// In en, this message translates to:
-  /// **'Verifying item weight on load cells...'**
+  /// **'Adding item...'**
   String get weightVerifying;
 
   /// No description provided for @weightMatchSuccess.
   ///
   /// In en, this message translates to:
-  /// **'Weight verified (±15g match)'**
+  /// **'Item verified'**
   String get weightMatchSuccess;
 
   /// No description provided for @weightMismatchWarning.
@@ -233,13 +233,13 @@ abstract class AppLocalizations {
   /// No description provided for @scanPrompt.
   ///
   /// In en, this message translates to:
-  /// **'Scan barcode with 2D scanner or enter manually'**
+  /// **'Scan product barcode or enter code'**
   String get scanPrompt;
 
   /// No description provided for @barcodeHint.
   ///
   /// In en, this message translates to:
-  /// **'Barcode number (e.g. 6223000123456)'**
+  /// **'Scan barcode or enter product code...'**
   String get barcodeHint;
 
   /// No description provided for @addItem.
@@ -251,13 +251,13 @@ abstract class AppLocalizations {
   /// No description provided for @verifyWeightHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter measured weight (g) or leave empty to auto-verify by catalog weight'**
+  /// **''**
   String get verifyWeightHint;
 
   /// No description provided for @weightGramsHint.
   ///
   /// In en, this message translates to:
-  /// **'Weight (g)'**
+  /// **'Weight'**
   String get weightGramsHint;
 
   /// No description provided for @totalAmount.
@@ -353,7 +353,7 @@ abstract class AppLocalizations {
   /// No description provided for @scaleOfflineHelp.
   ///
   /// In en, this message translates to:
-  /// **'Scale is offline — items can still be added by barcode confirmation'**
+  /// **'You can continue adding items by barcode'**
   String get scaleOfflineHelp;
 
   /// No description provided for @networkError.
@@ -437,19 +437,19 @@ abstract class AppLocalizations {
   /// No description provided for @paymentSuccessSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Thank you for shopping with SARE Autonomous Cart'**
+  /// **'Thank you for shopping with SARE Smart Cart'**
   String get paymentSuccessSubtitle;
 
   /// No description provided for @receiptHint.
   ///
   /// In en, this message translates to:
-  /// **'Scan this QR code with your phone camera to save your digital receipt. It also serves as your Exit Gate Pass.'**
+  /// **'Scan this QR code with your phone to save your digital receipt and exit through the gate.'**
   String get receiptHint;
 
   /// No description provided for @receiptHashLabel.
   ///
   /// In en, this message translates to:
-  /// **'Receipt Pass'**
+  /// **'Receipt No.'**
   String get receiptHashLabel;
 
   /// No description provided for @doneAndExit.
@@ -497,13 +497,13 @@ abstract class AppLocalizations {
   /// No description provided for @scaleReadyLabel.
   ///
   /// In en, this message translates to:
-  /// **'Scale Ready'**
+  /// **'Ready'**
   String get scaleReadyLabel;
 
   /// No description provided for @scaleOfflineLabel.
   ///
   /// In en, this message translates to:
-  /// **'Scale Offline'**
+  /// **'Barcode Mode'**
   String get scaleOfflineLabel;
 
   /// No description provided for @removeItemButton.
@@ -539,13 +539,13 @@ abstract class AppLocalizations {
   /// No description provided for @nfcModalSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Wave your store membership card near the handle NFC reader or pick a demo card below'**
+  /// **'Tap your membership card or select your account below'**
   String get nfcModalSubtitle;
 
   /// No description provided for @nfcInputHint.
   ///
   /// In en, this message translates to:
-  /// **'Enter NFC Card UID (e.g. 04:A2:19:7C)'**
+  /// **'Enter membership card code...'**
   String get nfcInputHint;
 
   /// No description provided for @nfcConnectButton.
@@ -569,31 +569,31 @@ abstract class AppLocalizations {
   /// No description provided for @liveScaleTitle.
   ///
   /// In en, this message translates to:
-  /// **'Basket Load-Cell Telemetry'**
+  /// **'All items verified'**
   String get liveScaleTitle;
 
   /// No description provided for @autoTareBadge.
   ///
   /// In en, this message translates to:
-  /// **'Auto-Tare: 0g'**
+  /// **'Ready'**
   String get autoTareBadge;
 
   /// No description provided for @toleranceBadge.
   ///
   /// In en, this message translates to:
-  /// **'±15g Gate'**
+  /// **'Verified'**
   String get toleranceBadge;
 
   /// No description provided for @simulatorTitle.
   ///
   /// In en, this message translates to:
-  /// **'Smart Sensor & Catalog Simulator'**
+  /// **'Quick Products (Demo Catalog)'**
   String get simulatorTitle;
 
   /// No description provided for @simulatorSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Tap any supermarket product to simulate barcode scan + load-cell weight verification'**
+  /// **'Tap any product to add it to your basket'**
   String get simulatorSubtitle;
 
   /// No description provided for @simulateValidScan.
@@ -641,13 +641,13 @@ abstract class AppLocalizations {
   /// No description provided for @orderItemsHeading.
   ///
   /// In en, this message translates to:
-  /// **'Verified Basket Items'**
+  /// **'Your Basket Items'**
   String get orderItemsHeading;
 
   /// No description provided for @totalBasketWeight.
   ///
   /// In en, this message translates to:
-  /// **'Total Verified Weight'**
+  /// **'Total Weight'**
   String get totalBasketWeight;
 
   /// No description provided for @pauseTimer.
