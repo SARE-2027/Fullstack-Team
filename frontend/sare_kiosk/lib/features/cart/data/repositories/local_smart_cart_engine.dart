@@ -297,24 +297,45 @@ class LocalSmartCartEngine {
     }
 
     final now = DateTime.now().toUtc();
-    final newItem = SessionItem(
-      id: _generateGuid(),
-      variantId: product.variantId,
-      productId: product.productId,
-      barcode: product.barcode,
-      nameAr: product.nameAr,
-      nameEn: product.nameEn,
-      unitPriceMinor: product.priceMinor,
-      expectedWeightG: measuredWeightG,
-      source: source,
-      addedAt: now,
-    );
+    final newId = _generateGuid();
+    final existingIdx =
+        current.items.indexWhere((i) => i.barcode == product.barcode);
 
-    final updatedItems = [...current.items, newItem];
-    final updatedTotal = updatedItems.fold<int>(0, (sum, i) => sum + i.unitPriceMinor);
+    final List<SessionItem> updatedItems;
+    if (existingIdx >= 0) {
+      final existing = current.items[existingIdx];
+      final incremented = existing.copyWith(
+        quantity: existing.quantity + 1,
+        mergedIds: [...existing.effectiveIds, newId],
+        addedAt: now,
+      );
+      updatedItems = List<SessionItem>.from(current.items);
+      updatedItems[existingIdx] = incremented;
+    } else {
+      final newItem = SessionItem(
+        id: newId,
+        variantId: product.variantId,
+        productId: product.productId,
+        barcode: product.barcode,
+        nameAr: product.nameAr,
+        nameEn: product.nameEn,
+        unitPriceMinor: product.priceMinor,
+        expectedWeightG: measuredWeightG,
+        source: source,
+        addedAt: now,
+        quantity: 1,
+        mergedIds: [newId],
+      );
+      updatedItems = [...current.items, newItem];
+    }
+
+    final updatedTotal =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.lineTotalMinor);
+    final updatedCount =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.quantity);
     final updatedSession = current.copyWith(
       items: updatedItems,
-      itemsCount: updatedItems.length,
+      itemsCount: updatedCount,
       totalMinor: updatedTotal,
       updatedAt: now,
     );
@@ -331,17 +352,62 @@ class LocalSmartCartEngine {
     );
   }
 
+  SessionSummary? decrementItem({
+    required String sessionId,
+    required String itemId,
+  }) {
+    final current = _sessions[sessionId];
+    if (current == null) return null;
+    final idx = current.items.indexWhere(
+      (i) => i.id == itemId || i.effectiveIds.contains(itemId),
+    );
+    if (idx < 0) return null;
+
+    final existing = current.items[idx];
+    if (existing.quantity <= 1) {
+      return removeItem(sessionId: sessionId, itemId: itemId);
+    }
+
+    final remainingIds = existing.effectiveIds.length > 1
+        ? existing.effectiveIds.sublist(0, existing.effectiveIds.length - 1)
+        : existing.effectiveIds;
+    final decremented = existing.copyWith(
+      quantity: existing.quantity - 1,
+      mergedIds: remainingIds,
+    );
+    final updatedItems = List<SessionItem>.from(current.items);
+    updatedItems[idx] = decremented;
+
+    final updatedTotal =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.lineTotalMinor);
+    final updatedCount =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.quantity);
+    final updated = current.copyWith(
+      items: updatedItems,
+      itemsCount: updatedCount,
+      totalMinor: updatedTotal,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _sessions[sessionId] = updated;
+    return updated;
+  }
+
   SessionSummary? removeItem({
     required String sessionId,
     required String itemId,
   }) {
     final current = _sessions[sessionId];
     if (current == null) return null;
-    final updatedItems = current.items.where((i) => i.id != itemId).toList();
-    final updatedTotal = updatedItems.fold<int>(0, (sum, i) => sum + i.unitPriceMinor);
+    final updatedItems = current.items
+        .where((i) => i.id != itemId && !i.effectiveIds.contains(itemId))
+        .toList();
+    final updatedTotal =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.lineTotalMinor);
+    final updatedCount =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.quantity);
     final updated = current.copyWith(
       items: updatedItems,
-      itemsCount: updatedItems.length,
+      itemsCount: updatedCount,
       totalMinor: updatedTotal,
       updatedAt: DateTime.now().toUtc(),
     );

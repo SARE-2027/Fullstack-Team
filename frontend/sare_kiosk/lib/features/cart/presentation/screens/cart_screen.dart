@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/language_helper.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../session/data/models/session_models.dart';
@@ -254,11 +255,17 @@ class _CartScreenState extends State<CartScreen> {
                 onToggleTheme: widget.onToggleTheme,
                 isDarkMode: widget.isDarkMode,
                 floatingBanner: banner,
-                body: const Center(child: CircularProgressIndicator()),
+                body: const KioskCartShimmerSkeleton(),
               );
             }
 
             if (session == null) {
+              final localizedSessionError = LanguageHelper.localizeError(
+                sessionState.error,
+                l10n,
+                locale,
+                fallback: l10n.networkError,
+              );
               return KioskScaffold(
                 onToggleLocale: widget.onToggleLocale,
                 onToggleTheme: widget.onToggleTheme,
@@ -284,7 +291,7 @@ class _CartScreenState extends State<CartScreen> {
                         ),
                         const SizedBox(height: 8),
                         CustomText(
-                          sessionState.error ?? l10n.networkError,
+                          localizedSessionError,
                           fontSize: 13,
                           color: colors.textSecondary,
                           textAlign: TextAlign.center,
@@ -454,7 +461,11 @@ class _CartScreenState extends State<CartScreen> {
           onAction: () => context.read<CartCubit>().dismissBanner(),
         );
       case WeightBannerKind.mismatch:
-        final msg = cartState.bannerMessage ?? l10n.weightMismatchWarning;
+        final msg = LanguageHelper.localizeBannerMismatch(
+          cartState: cartState,
+          l10n: l10n,
+          locale: locale,
+        );
         return KioskStatusBanner(
           key: ValueKey('banner-mismatch-$msg'),
           message: msg,
@@ -464,9 +475,15 @@ class _CartScreenState extends State<CartScreen> {
         );
       case WeightBannerKind.none:
         if (sessionState.error != null) {
+          final errMsg = LanguageHelper.localizeError(
+            sessionState.error,
+            l10n,
+            locale,
+            fallback: l10n.networkError,
+          );
           return KioskStatusBanner(
-            key: ValueKey('banner-error-${sessionState.error}'),
-            message: sessionState.error!,
+            key: ValueKey('banner-error-$errMsg'),
+            message: errMsg,
             status: KioskBannerStatus.discrepancy,
             actionLabel: l10n.retry,
             onAction: () => context.read<SessionCubit>().refresh(),
@@ -482,95 +499,106 @@ class _CartScreenState extends State<CartScreen> {
     AppColorTheme colors,
   ) {
     final items = session.items;
-    if (items.isEmpty) {
-      return KioskSurfaceCard(
-        borderRadius: 20,
-        padding: EdgeInsets.zero,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 84,
-                    height: 84,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: colors.brand.withValues(alpha: 0.06),
-                      border: Border.all(
-                        color: colors.brand.withValues(alpha: 0.16),
-                        width: 1.2,
-                      ),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          gradient: colors.brandGradient,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: colors.brandGlow,
-                              blurRadius: 18,
-                              offset: const Offset(0, 6),
-                              spreadRadius: -4,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.shopping_bag_rounded,
-                          size: 26,
-                          color: colors.onBrand,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  CustomText(
-                    l10n.emptyCartTitle,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  const SizedBox(height: 6),
-                  CustomText(
-                    l10n.emptyCartMessage,
-                    fontSize: 13.5,
-                    color: colors.textSecondary,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  CustomText(
-                    l10n.emptyCartHint,
-                    fontSize: 12,
-                    color: colors.textFaint,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
     return RepaintBoundary(
-      child: ListView.separated(
-        controller: _itemsScrollCtrl,
-        padding: const EdgeInsets.only(bottom: 4),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return RepaintBoundary(
-            child: CartItemTile(
-              key: ValueKey(item.id),
-              item: item,
-              onRemove: () => context.read<CartCubit>().removeItem(item.id),
-            ),
-          );
-        },
+      child: AnimatedSwitcher(
+        duration: AppTypography.base,
+        switchInCurve: AppTypography.enterCurve,
+        switchOutCurve: AppTypography.exitCurve,
+        child: items.isEmpty
+            ? KioskSurfaceCard(
+                key: const ValueKey('cart-empty-card'),
+                borderRadius: 20,
+                padding: EdgeInsets.zero,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 84,
+                            height: 84,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: colors.brand.withValues(alpha: 0.06),
+                              border: Border.all(
+                                color: colors.brand.withValues(alpha: 0.16),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 56,
+                                height: 56,
+                                decoration: BoxDecoration(
+                                  gradient: colors.brandGradient,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colors.brandGlow,
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 6),
+                                      spreadRadius: -4,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.shopping_bag_rounded,
+                                  size: 26,
+                                  color: colors.onBrand,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomText(
+                            l10n.emptyCartTitle,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          const SizedBox(height: 6),
+                          CustomText(
+                            l10n.emptyCartMessage,
+                            fontSize: 13.5,
+                            color: colors.textSecondary,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          CustomText(
+                            l10n.emptyCartHint,
+                            fontSize: 12,
+                            color: colors.textFaint,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : ListView.builder(
+                key: const ValueKey('cart-items-list'),
+                controller: _itemsScrollCtrl,
+                padding: const EdgeInsets.only(bottom: 4),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return RepaintBoundary(
+                    child: CartItemTile(
+                      key: ValueKey(item.id),
+                      item: item,
+                      onIncrement: () => context
+                          .read<CartCubit>()
+                          .addItemByScan(item.barcode),
+                      onDecrement: () =>
+                          context.read<CartCubit>().decrementItem(item.id),
+                      onRemove: () =>
+                          context.read<CartCubit>().removeItem(item.id),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }

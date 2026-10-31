@@ -98,6 +98,45 @@ class CartCubit extends Cubit<CartState> {
     return ok;
   }
 
+  Future<bool> decrementItem(String itemId) async {
+    if (_busy) return false;
+    final sid = _sessionId;
+    if (sid.isEmpty || itemId.isEmpty) return false;
+
+    final existing = _sessionCubit.state.session?.items
+        .where((i) => i.id == itemId || i.effectiveIds.contains(itemId))
+        .firstOrNull;
+    if (existing == null) return false;
+
+    if (existing.quantity <= 1) {
+      return removeItem(itemId);
+    }
+
+    _busy = true;
+    final result = await _cartRepo.decrementItem(sessionId: sid, itemId: itemId);
+    if (isClosed) {
+      _busy = false;
+      return false;
+    }
+
+    final ok = result.fold(
+      (f) {
+        emit(CartState(
+          isAdding: false,
+          bannerKind: WeightBannerKind.mismatch,
+          bannerMessage: f.message,
+        ));
+        return false;
+      },
+      (updatedSession) {
+        _sessionCubit.setSession(updatedSession);
+        return true;
+      },
+    );
+    _busy = false;
+    return ok;
+  }
+
   Future<bool> removeItem(String itemId) async {
     if (_busy) return false;
     final sid = _sessionId;

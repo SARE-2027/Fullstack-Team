@@ -309,4 +309,55 @@ void main() {
       expect(find.byType(WelcomeCheckInScreen), findsNothing);
     },
   );
+
+  testWidgets(
+    'Arabic mode shows localized Arabic error messages and coalesces duplicate scans into a single card',
+    (tester) async {
+      _setKioskViewport(tester);
+
+      await tester.pumpWidget(const SareKioskApp());
+      await tester.pumpAndSettle();
+
+      // App starts in Arabic ('ar') by default -> tap 'ابدأ التسوق كزائر / ضيف'
+      await tester.tap(find.text('ابدأ التسوق كزائر / ضيف').last);
+      await tester.pumpAndSettle();
+      expect(find.byType(CartScreen), findsOneWidget);
+
+      // 1. Scan an unknown barcode in Arabic mode -> must show Arabic error message
+      final textFields = find.byType(TextField);
+      await tester.enterText(textFields.first, '999999');
+      await tester.tap(find.text('إضافة المنتج'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.textContaining('لم يتم العثور على منتج مسجل بالباركود'),
+        findsOneWidget,
+      );
+
+      // 2. Scan the same valid item twice -> coalesces into 1 card with count 2
+      final validButtons = find.text('+ مسح (مطابق)');
+      await tester.tap(validButtons.first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(validButtons.first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('2 أصناف'), findsOneWidget);
+      expect(find.text('×٢'), findsOneWidget);
+
+      // 3. Trigger a Fraud scan in Arabic mode -> must show Arabic discrepancy message
+      final fraudButtons = find.text('اختلاف وزن (+95جم)');
+      await tester.tap(fraudButtons.first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(
+        find.textContaining('تنبيه اختلاف الوزن في'),
+        findsOneWidget,
+      );
+    },
+  );
 }
