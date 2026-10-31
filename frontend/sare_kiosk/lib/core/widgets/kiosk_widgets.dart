@@ -13,6 +13,7 @@ export 'kiosk_price_text.dart';
 export 'kiosk_pulse_dot.dart';
 export 'kiosk_scaffold.dart';
 export 'kiosk_section_label.dart';
+export 'kiosk_shimmer.dart';
 export 'kiosk_staff_help_dialog.dart';
 export 'kiosk_status_badge.dart';
 export 'kiosk_status_banner.dart';

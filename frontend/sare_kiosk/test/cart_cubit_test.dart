@@ -146,6 +146,38 @@ void main() {
     );
   });
 
+  group('CartCubit — duplicate coalescing & decrement', () {
+    test(
+      'scanning the same product twice coalesces into 1 card with quantity 2 and doubled line total',
+      () async {
+        await stack.cartCubit.addItemByScan(
+          '6223000123456', // Sunshine Tuna 65.00 EGP (6500 minor)
+          measuredWeightG: 180,
+        );
+        await stack.cartCubit.addItemByScan(
+          '6223000123456',
+          measuredWeightG: 180,
+        );
+
+        final session = stack.sessionCubit.state.session!;
+        expect(session.items.length, 1);
+        expect(session.items.first.quantity, 2);
+        expect(session.itemsCount, 2);
+        expect(session.totalMinor, 13000);
+
+        // Decrement once -> stays 1 card with quantity 1
+        final itemId = session.items.first.id;
+        await stack.cartCubit.decrementItem(itemId);
+
+        final afterDec = stack.sessionCubit.state.session!;
+        expect(afterDec.items.length, 1);
+        expect(afterDec.items.first.quantity, 1);
+        expect(afterDec.itemsCount, 1);
+        expect(afterDec.totalMinor, 6500);
+      },
+    );
+  });
+
   group('CartCubit — checkout', () {
     blocTest<CartCubit, CartState>(
       'checkout closes the session and produces a receipt',

@@ -58,7 +58,37 @@ class SessionSummary extends Equatable {
 
   bool get isMember => (userName != null && userName!.isNotEmpty) || (nfcUid != null && nfcUid!.isNotEmpty);
 
-  int get totalExpectedWeightG => items.fold<int>(0, (sum, item) => sum + item.expectedWeightG);
+  int get totalExpectedWeightG =>
+      items.fold<int>(0, (sum, item) => sum + item.lineExpectedWeightG);
+
+  /// Coalesces multiple raw scan items with the same barcode/variantId into a
+  /// single [SessionItem] card with aggregated [SessionItem.quantity].
+  static List<SessionItem> coalesceItems(List<SessionItem> rawItems) {
+    if (rawItems.length <= 1) return rawItems;
+    final byKey = <String, SessionItem>{};
+    for (final item in rawItems) {
+      final key = item.barcode.isNotEmpty ? item.barcode : item.variantId;
+      if (key.isEmpty) {
+        byKey[item.id] = item;
+        continue;
+      }
+      final existing = byKey[key];
+      if (existing == null) {
+        byKey[key] = item.copyWith(
+          mergedIds: item.effectiveIds,
+        );
+      } else {
+        byKey[key] = existing.copyWith(
+          quantity: existing.quantity + item.quantity,
+          mergedIds: [...existing.effectiveIds, ...item.effectiveIds],
+          addedAt: item.addedAt.isAfter(existing.addedAt)
+              ? item.addedAt
+              : existing.addedAt,
+        );
+      }
+    }
+    return byKey.values.toList(growable: false);
+  }
 
   SessionSummary copyWith({
     String? sessionId,
@@ -103,7 +133,10 @@ class SessionSummary extends Equatable {
     }
 
     final itemsRaw = (json['items'] ?? json['Items']) as List? ?? const [];
-    final parsedItems = itemsRaw.whereType<Map<String, dynamic>>().map(SessionItem.fromJson).toList();
+    final parsedItems = coalesceItems(
+      itemsRaw.whereType<Map<String, dynamic>>().map(SessionItem.fromJson).toList(),
+    );
+    final totalUnits = parsedItems.fold<int>(0, (sum, i) => sum + i.quantity);
     return SessionSummary(
       sessionId: (json['sessionId'] ?? json['SessionId'] ?? json['id'] ?? '').toString(),
       cartId: (json['cartId'] ?? json['CartId'] ?? '').toString(),
@@ -112,7 +145,7 @@ class SessionSummary extends Equatable {
       nfcUid: (json['nfcUid'] ?? json['NfcUid'])?.toString(),
       status: parseSessionStatus((json['status'] ?? json['Status'] ?? 'Open').toString()),
       totalMinor: (json['totalMinor'] ?? json['TotalMinor'] ?? 0) as int? ?? int.tryParse('${json['totalMinor']}') ?? 0,
-      itemsCount: (json['itemsCount'] ?? json['ItemsCount'] ?? parsedItems.length) as int? ?? parsedItems.length,
+      itemsCount: (json['itemsCount'] ?? json['ItemsCount'] ?? totalUnits) as int? ?? totalUnits,
       startedAt: parseDate(json['startedAt'] ?? json['StartedAt']),
       updatedAt: parseDate(json['updatedAt'] ?? json['UpdatedAt'] ?? json['startedAt'] ?? json['StartedAt']),
       closedAt: (json['closedAt'] ?? json['ClosedAt']) == null ? null : parseDate(json['closedAt'] ?? json['ClosedAt']),
@@ -159,6 +192,8 @@ class SessionItem extends Equatable {
     required this.expectedWeightG,
     required this.source,
     required this.addedAt,
+    this.quantity = 1,
+    this.mergedIds = const [],
   });
 
   final String id;
@@ -172,14 +207,56 @@ class SessionItem extends Equatable {
   final int expectedWeightG;
   final String source;
   final DateTime addedAt;
+  final int quantity;
+  final List<String> mergedIds;
+
+  int get lineTotalMinor => unitPriceMinor * quantity;
+  int get lineExpectedWeightG => expectedWeightG * quantity;
+  List<String> get effectiveIds => mergedIds.isEmpty ? [id] : mergedIds;
 
   String displayName(String localeCode) => localeCode == 'ar' ? nameAr : nameEn;
+
+  SessionItem copyWith({
+    String? id,
+    String? variantId,
+    String? productId,
+    String? barcode,
+    String? nameAr,
+    String? nameEn,
+    String? imageUrl,
+    int? unitPriceMinor,
+    int? expectedWeightG,
+    String? source,
+    DateTime? addedAt,
+    int? quantity,
+    List<String>? mergedIds,
+  }) {
+    return SessionItem(
+      id: id ?? this.id,
+      variantId: variantId ?? this.variantId,
+      productId: productId ?? this.productId,
+      barcode: barcode ?? this.barcode,
+      nameAr: nameAr ?? this.nameAr,
+      nameEn: nameEn ?? this.nameEn,
+      imageUrl: imageUrl ?? this.imageUrl,
+      unitPriceMinor: unitPriceMinor ?? this.unitPriceMinor,
+      expectedWeightG: expectedWeightG ?? this.expectedWeightG,
+      source: source ?? this.source,
+      addedAt: addedAt ?? this.addedAt,
+      quantity: quantity ?? this.quantity,
+      mergedIds: mergedIds ?? this.mergedIds,
+    );
+  }
 
   factory SessionItem.fromJson(Map<String, dynamic> json) {
     DateTime parseDate(dynamic v) =>
         v == null ? DateTime.now().toUtc() : DateTime.tryParse(v.toString()) ?? DateTime.now().toUtc();
+    final itemId = (json['id'] ?? json['Id'] ?? '').toString();
+    final qty = (json['quantity'] ?? json['Quantity'] ?? 1) as int? ??
+        int.tryParse('${json['quantity']}') ??
+        1;
     return SessionItem(
-      id: (json['id'] ?? json['Id'] ?? '').toString(),
+      id: itemId,
       variantId: (json['variantId'] ?? json['VariantId'] ?? '').toString(),
       productId: (json['productId'] ?? json['ProductId'] ?? '').toString(),
       barcode: (json['barcode'] ?? json['Barcode'] ?? '').toString(),
@@ -194,6 +271,8 @@ class SessionItem extends Equatable {
           0,
       source: (json['source'] ?? json['Source'] ?? 'Scanner').toString(),
       addedAt: parseDate(json['addedAt'] ?? json['AddedAt']),
+      quantity: qty < 1 ? 1 : qty,
+      mergedIds: itemId.isEmpty ? const [] : [itemId],
     );
   }
 
@@ -210,6 +289,8 @@ class SessionItem extends Equatable {
         expectedWeightG,
         source,
         addedAt,
+        quantity,
+        mergedIds,
       ];
 }
 

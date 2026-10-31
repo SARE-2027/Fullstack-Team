@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/custom_text.dart';
 import '../../../../core/widgets/kiosk_button.dart';
 import '../../../../core/widgets/kiosk_price_text.dart';
 import '../../../../core/widgets/kiosk_section_label.dart';
+import '../../../../core/widgets/kiosk_shimmer.dart';
 import '../../../../core/widgets/kiosk_surface_card.dart';
 import '../../../../l10n/app_localizations.dart';
 
@@ -86,45 +88,73 @@ class CartSummaryBar extends StatelessWidget {
                     color: colors.brand.withValues(alpha: 0.25),
                   ),
                 ),
-                child: CustomText(
-                  l10n.itemsCount(itemsCount),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w700,
-                  color: colors.brand,
-                  tabularFigures: true,
-                  maxLines: 1,
+                child: AnimatedSwitcher(
+                  duration: AppTypography.fast,
+                  transitionBuilder: (child, anim) => ScaleTransition(
+                    scale: Tween<double>(begin: 0.90, end: 1.0).animate(anim),
+                    child: FadeTransition(opacity: anim, child: child),
+                  ),
+                  child: CustomText(
+                    l10n.itemsCount(itemsCount),
+                    key: ValueKey(itemsCount),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: colors.brand,
+                    tabularFigures: true,
+                    maxLines: 1,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          // Hero Total Display Box
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: colors.surfaceAlt,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: colors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CustomText(
-                  l10n.totalAmount,
-                  fontSize: 12.5,
-                  color: colors.textSecondary,
-                  fontWeight: FontWeight.w600,
-                ),
-                const SizedBox(height: 6),
-                Align(
-                  alignment: AlignmentDirectional.centerEnd,
-                  child: KioskPriceText(
-                    minor: totalMinor,
-                    amountSize: 28,
-                    amountColor: colors.brand,
+          // Hero Total Display Box with subtle shimmer sweep on refresh/change
+          KioskShimmerSweep(
+            active: isBusy || isVerifying,
+            triggerKey: totalMinor,
+            borderRadius: 16,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: colors.surfaceAlt,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CustomText(
+                    l10n.totalAmount,
+                    fontSize: 12.5,
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: AnimatedSwitcher(
+                      duration: AppTypography.fast,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.15),
+                            end: Offset.zero,
+                          ).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: KioskPriceText(
+                        key: ValueKey(totalMinor),
+                        minor: totalMinor,
+                        amountSize: 28,
+                        amountColor: colors.brand,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),

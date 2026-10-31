@@ -144,6 +144,18 @@ class CartRepository {
     }
   }
 
+  Future<Result<SessionSummary>> decrementItem({
+    required String sessionId,
+    required String itemId,
+  }) async {
+    final updatedLocal =
+        _localEngine.decrementItem(sessionId: sessionId, itemId: itemId);
+    if (updatedLocal != null) {
+      return Right(updatedLocal);
+    }
+    return const Left(ServerFailure('Could not remove item from session.'));
+  }
+
   Future<Result<SessionSummary>> removeItem({
     required String sessionId,
     required String itemId,
@@ -166,12 +178,14 @@ class CartRepository {
       return const Left(ServerFailure('Active session not found.'));
     }
 
-    final updatedItems = [...current.items, item];
+    final updatedItems = SessionSummary.coalesceItems([...current.items, item]);
     final updatedTotal =
-        updatedItems.fold<int>(0, (sum, i) => sum + i.unitPriceMinor);
+        updatedItems.fold<int>(0, (sum, i) => sum + i.lineTotalMinor);
+    final updatedCount =
+        updatedItems.fold<int>(0, (sum, i) => sum + i.quantity);
     final updated = current.copyWith(
       items: updatedItems,
-      itemsCount: updatedItems.length,
+      itemsCount: updatedCount,
       totalMinor: updatedTotal,
       updatedAt: DateTime.now().toUtc(),
     );

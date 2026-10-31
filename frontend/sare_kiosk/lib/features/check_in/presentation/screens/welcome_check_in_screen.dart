@@ -7,6 +7,7 @@ import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/kiosk_motion.dart';
+import '../../../../core/utils/language_helper.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../cart/data/repositories/local_smart_cart_engine.dart';
@@ -123,12 +124,21 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final locale = Localizations.localeOf(context).languageCode;
     final colors = context.colors;
     final config = context.kioskConfig;
 
     return BlocBuilder<SessionCubit, SessionState>(
       builder: (context, sessionState) {
-        final sessionError = sessionState.error;
+        final rawError = _localError ?? sessionState.error;
+        final sessionError = rawError != null
+            ? LanguageHelper.localizeError(
+                rawError,
+                l10n,
+                locale,
+                fallback: l10n.sessionFailed,
+              )
+            : null;
 
         return KioskScaffold(
           onToggleLocale: widget.onToggleLocale,
@@ -297,9 +307,7 @@ class _WelcomeCheckInScreenState extends State<WelcomeCheckInScreen>
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: CustomText(
-                                        _localError ??
-                                            sessionError ??
-                                            l10n.sessionFailed,
+                                        sessionError ?? l10n.sessionFailed,
                                         fontSize: 13,
                                         color: colors.danger,
                                         fontWeight: FontWeight.w600,

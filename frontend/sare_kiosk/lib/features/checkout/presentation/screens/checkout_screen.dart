@@ -6,6 +6,8 @@ import '../../../../core/config/kiosk_config_exports.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/utils/kiosk_formatter.dart';
+import '../../../../core/utils/language_helper.dart';
 import '../../../../core/utils/money.dart';
 import '../../../../core/widgets/kiosk_widgets.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -100,7 +102,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 onToggleLocale: widget.onToggleLocale,
                 onToggleTheme: widget.onToggleTheme,
                 isDarkMode: widget.isDarkMode,
-                body: const Center(child: CircularProgressIndicator()),
+                body: const KioskCartShimmerSkeleton(),
               );
             }
 
@@ -119,9 +121,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
             Widget? banner;
             if (cartState.bannerKind == WeightBannerKind.mismatch) {
+              final msg = LanguageHelper.localizeBannerMismatch(
+                cartState: cartState,
+                l10n: l10n,
+                locale: locale,
+              );
               banner = KioskStatusBanner(
-                key: ValueKey('banner-mismatch-${cartState.bannerMessage}'),
-                message: cartState.bannerMessage ?? l10n.networkError,
+                key: ValueKey('banner-mismatch-$msg'),
+                message: msg,
                 status: KioskBannerStatus.discrepancy,
               );
             }
@@ -291,10 +298,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             : l10n.toleranceBadge;
         final itemIcon = catalogProduct?.icon ?? Icons.shopping_bag_rounded;
         final price = Money.formatMinor(
+          item.lineTotalMinor,
+          locale,
+          symbol: ' ${l10n.currencySymbol}',
+        );
+        final unitPrice = Money.formatMinor(
           item.unitPriceMinor,
           locale,
           symbol: ' ${l10n.currencySymbol}',
         );
+        final qtyStr = KioskFormatter.formatNumber(item.quantity, locale);
+        final subLine = item.quantity > 1
+            ? '$categoryLabel • $qtyStr × $unitPrice'
+            : categoryLabel;
 
         return Row(
           children: [
@@ -327,10 +343,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                   const SizedBox(height: 2),
                   CustomText(
-                    categoryLabel,
+                    subLine,
                     fontSize: 11.5,
                     color: colors.textSecondary,
                     maxLines: 1,
+                    tabularFigures: true,
                   ),
                 ],
               ),
